@@ -1,0 +1,30 @@
+# Docs: docs/04 - Architecture/Server.md
+# Purpose: Dholphin's server on the internet, behind this machine's Traefik, with HTTPS on your domain.
+# Set DHOLPHIN_DOMAIN (in docker/.env). Network and certificate resolver default to this machine's Traefik (ezt, coolroom).
+# Start: docker compose -f docker/compose.traefik.yml up -d    The setup code: docker logs dholphin
+# Docs: Traefik/Docker routing labels, Docker/Compose services.
+services:
+  dholphin:
+    # The published image (hub.docker.com/r/gandasdevstudio/dholphin); tools/build_server.sh builds dholphin:latest locally.
+    image: ${DHOLPHIN_IMAGE:-gandasdevstudio/dholphin:latest}
+    container_name: dholphin
+    restart: unless-stopped
+    volumes: ["dholphin-data:/data"]
+    environment:
+      # Traefik passes the visitor's address and the public https address in X-Forwarded-* headers.
+      TRUST_PROXY: "1"
+    networks: [traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-ezt}
+      - traefik.http.routers.dholphin.rule=Host(`${DHOLPHIN_DOMAIN:?Set DHOLPHIN_DOMAIN in docker/.env}`)
+      - traefik.http.routers.dholphin.entrypoints=websecure
+      - traefik.http.routers.dholphin.tls=true
+      - traefik.http.routers.dholphin.tls.certresolver=${TRAEFIK_RESOLVER:-coolroom}
+      - traefik.http.services.dholphin.loadbalancer.server.port=8080
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-ezt}
+volumes:
+  dholphin-data: {}

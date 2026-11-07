@@ -1,0 +1,10 @@
+<resources>
+    <style name="Theme.Dholphin" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:navigationBarColor">@color/bg</item>
+        <item name="android:statusBarColor">@color/bg</item>
+    </style>
+    <color name="bg">#0E0E10</color>
+</resources>

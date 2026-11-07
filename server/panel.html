@@ -1,0 +1,133 @@
+<!doctype html>
+<!-- Docs: docs/04 - Architecture/Server.md -->
+<!-- Purpose: the server's panel: keys, Jellyfin and Seerr, the relay, the web app, profiles, devices and the password. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Dholphin panel</title>
+<style>
+:root{color-scheme:dark;--bg:#0E0E10;--surface:#18181B;--raised:#26262B;--border:#3A3A41;--text:#F4F4F5;--muted:#A9A9B2;--accent:#E5232D;--ok:#3CCB7F;--warn:#F5A524}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 Inter,system-ui,sans-serif}
+main{max-width:880px;margin:0 auto;padding:32px 16px 80px;display:grid;gap:20px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:30px}
+h2{margin:0 0 4px;font-size:20px}
+section{background:var(--surface);border-radius:14px;padding:20px;display:grid;gap:14px}
+p,.muted{color:var(--muted);margin:0}
+label{display:grid;gap:6px;font-weight:600;font-size:15px}
+input,select{font:inherit;padding:11px 12px;border-radius:9px;border:2px solid var(--border);background:var(--bg);color:inherit;min-width:0}
+input:focus,select:focus{outline:none;border-color:var(--text)}
+button{font:inherit;font-weight:700;padding:10px 16px;border:0;border-radius:9px;background:var(--raised);color:var(--text);cursor:pointer}
+button.pri{background:var(--accent);color:#fff}
+button:hover{filter:brightness(1.15)}
+button:focus-visible,a:focus-visible{outline:3px solid var(--text);outline-offset:2px}
+button:disabled{opacity:.5;cursor:wait}
+a{color:var(--text)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.item{display:grid;gap:10px;padding:14px;border-radius:10px;background:var(--bg)}
+.tag{font-size:13px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--raised)}
+.tag.ok{background:var(--ok);color:#0E0E10}.tag.warn{background:var(--warn);color:#0E0E10}
+.code{font:700 34px/1 ui-monospace,monospace;letter-spacing:.12em}
+.err{color:#FCA5A5;min-height:1.2em}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:9px;font-weight:700}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main id="app"><p>Loading…</p></main>
+<script>
+// Everything is drawn with textContent and attributes, never as HTML from the server's data.
+const app = document.getElementById('app');
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
+  for (const k of kids.flat()) if (k != null) e.append(k.nodeType ? k : String(k));
+  return e;
+};
+const api = async (path, body, method = body ? 'POST' : 'GET') => {
+  const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.message ?? `The server answered ${r.status}`);
+  return j;
+};
+const toast = (t) => {
+  document.querySelector('.toast')?.remove();
+  const e = el('div', { class: 'toast', role: 'status' }, t);
+  document.body.append(e);
+  setTimeout(() => e.remove(), 3000);
+};
+const when = (t) => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(t);
+
+async function start() {
+  const s = await api('/api/status');
+  if (!s.signedIn) return signIn(s.setup);
+  draw(await api('/api/admin/state'));
+}
+
+function signIn(setup) {
+  const code = el('input', { autocomplete: 'off', spellcheck: 'false' }), pw = el('input', { type: 'password', minlength: 8, required: true, autocomplete: setup ? 'new-password' : 'current-password' }), err = el('p', { class: 'err', role: 'alert' });
+  const go = el('button', { class: 'pri', type: 'submit' }, setup ? 'Set the password' : 'Sign in');
+  app.replaceChildren(el('header', {}, el('h1', {}, 'Dholphin panel')), el('section', {},
+    el('p', {}, setup ? 'A fresh server. Enter the setup code printed in its log (docker logs dholphin), then choose the household password.' : 'Sign in with the household password.'),
+    el('form', { onsubmit: async (e) => {
+      e.preventDefault(); go.disabled = true; err.textContent = '';
+      try { await api(setup ? '/api/setup' : '/api/login', setup ? { code: code.value.trim(), password: pw.value, name: 'Panel' } : { password: pw.value, name: 'Panel' }); start(); } catch (x) { err.textContent = x.message; go.disabled = false; }
+    } }, el('div', { class: 'grid' }, setup ? el('label', {}, 'Setup code', code) : null, el('label', {}, 'Password', pw)), err, go)));
+  (setup ? code : pw).focus();
+}
+
+function draw(st) {
+  const save = async (body, msg = 'Saved') => { try { draw(await api('/api/admin/settings', body)); toast(msg); } catch (x) { toast(x.message); } };
+  // Film data keys: shown only as set or missing, never their value.
+  const keyIn = Object.fromEntries(['tmdb', 'omdb', 'trakt', 'google'].map((k) => [k, el('input', { type: 'password', autocomplete: 'off', placeholder: st.keys[k] ? 'Set. Leave empty to keep it' : 'Missing' })]));
+  const keyNames = { tmdb: 'TMDB key (needed)', omdb: 'OMDb key', trakt: 'Trakt client ID', google: 'Google Knowledge Graph key' };
+  // Jellyfin, Seerr and the relay.
+  const jf = el('input', { value: st.jellyfin, placeholder: 'http://192.168.1.20:8096' }), se = el('input', { value: st.seerr, placeholder: 'http://192.168.1.20:5055' });
+  const sk = el('input', { type: 'password', autocomplete: 'off', placeholder: st.seerrKey ? 'Set. Leave empty to keep it' : 'Missing' });
+  const relay = el('select', {}, ...[['auto', 'Automatic: relay a local address, reach a public one directly'], ['on', 'Always relay'], ['off', 'Never relay']].map(([v, t]) => el('option', { value: v, selected: st.relay === v }, t)));
+  const relayNow = (name, on, addr) => addr ? el('span', { class: `tag ${on ? 'warn' : 'ok'}` }, `${name}: ${on ? 'through this server' : 'direct'}`) : null;
+  // Profiles, each with its own Jellyfin account.
+  const profiles = st.profiles.map((p) => {
+    const name = el('input', { value: p.name, maxlength: 14, 'aria-label': `Name of ${p.name}` });
+    const user = el('input', { placeholder: 'Jellyfin user', autocomplete: 'off', 'aria-label': `Jellyfin user for ${p.name}` }), pw = el('input', { type: 'password', placeholder: 'Password', autocomplete: 'off', 'aria-label': `Jellyfin password for ${p.name}` });
+    return el('div', { class: 'item' },
+      el('div', { class: 'row' }, el('span', { style: `width:14px;height:14px;border-radius:4px;background:${/^#[0-9a-f]{6}$/i.test(p.color) ? p.color : '#555'}` }), el('b', {}, p.name), el('span', { class: `tag ${p.jellyfin ? 'ok' : ''}` }, p.jellyfin ? 'Jellyfin connected' : 'No Jellyfin account')),
+      el('div', { class: 'row' }, name, el('button', { onclick: async () => { try { draw(await api('/api/admin/profiles', { action: 'rename', id: p.id, name: name.value })); toast('Renamed'); } catch (x) { toast(x.message); } } }, 'Rename'),
+        el('button', { disabled: st.profiles.length < 2, onclick: async () => { if (!confirm(`Delete ${p.name} and its history, list and ratings?`)) return; try { draw(await api('/api/admin/profiles', { action: 'delete', id: p.id })); toast('Deleted'); } catch (x) { toast(x.message); } } }, 'Delete')),
+      el('div', { class: 'row' }, user, pw, el('button', { onclick: async () => { try { draw(await api('/api/admin/jellyfin', { profileId: p.id, user: user.value, password: pw.value })); toast(`${p.name} is connected to Jellyfin`); } catch (x) { toast(x.message); } } }, 'Connect Jellyfin')));
+  });
+  const newName = el('input', { placeholder: 'Name', maxlength: 14, 'aria-label': 'New profile name' });
+  // Devices, and linking a TV.
+  const codeBox = el('div', { class: 'item', hidden: true });
+  const devices = st.devices.map((d) => el('div', { class: 'item' }, el('div', { class: 'row' }, el('b', {}, d.name), el('span', { class: 'tag' }, d.kind === 'device' ? 'TV or app' : 'Browser'), el('span', { class: 'muted' }, `Last seen ${when(d.lastSeen)}`), el('button', { onclick: async () => { if (!confirm(`Sign out ${d.name}?`)) return; draw(await api(`/api/admin/devices/${d.id}`, null, 'DELETE')); toast('Signed out'); } }, 'Sign out'))));
+  const oldPw = el('input', { type: 'password', autocomplete: 'current-password' }), newPw = el('input', { type: 'password', minlength: 8, autocomplete: 'new-password' });
+
+  app.replaceChildren(
+    el('header', {}, el('h1', {}, 'Dholphin panel'), el('span', { class: 'muted' }, `Server ${st.version}`), st.webApp ? el('a', { href: '/' }, 'Open the web app') : null),
+    el('section', {}, el('h2', {}, 'Web app'), el('p', {}, 'The app in a browser, on a computer or a phone, at this address. Off, only linked TVs use the server.'),
+      el('div', { class: 'row' }, el('span', { class: `tag ${st.webApp ? 'ok' : ''}` }, st.webApp ? 'On' : 'Off'), el('button', { onclick: () => save({ webApp: !st.webApp }, st.webApp ? 'Web app turned off' : 'Web app turned on') }, st.webApp ? 'Turn off' : 'Turn on'))),
+    el('section', {}, el('h2', {}, 'Film data keys'), el('p', {}, 'Kept on the server: apps and browsers never see them. The server keeps TMDB’s answers and pictures, so pages load quickly everywhere.'),
+      el('div', { class: 'grid' }, ...Object.entries(keyIn).map(([k, i]) => el('label', {}, keyNames[k], i))),
+      el('div', { class: 'row' }, el('button', { class: 'pri', onclick: () => save({ keys: Object.fromEntries(Object.entries(keyIn).map(([k, i]) => [k, i.value])) }, 'Keys saved') }, 'Save keys'))),
+    el('section', {}, el('h2', {}, 'Jellyfin and Seerr'), el('p', {}, 'One Jellyfin server and one Seerr for the household. Each profile signs in to Jellyfin with its own user, below.'),
+      el('div', { class: 'grid' }, el('label', {}, 'Jellyfin address', jf), el('label', {}, 'Seerr address', se), el('label', {}, 'Seerr API key', sk)),
+      el('label', {}, 'Away from home', relay), el('div', { class: 'row' }, relayNow('Jellyfin', st.relayNow.jellyfin, st.jellyfin), relayNow('Seerr', st.relayNow.seerr, st.seerr)),
+      el('div', { class: 'row' }, el('button', { class: 'pri', onclick: () => save({ jellyfin: jf.value, seerr: se.value, seerrKey: sk.value, relay: relay.value }) }, 'Save'))),
+    el('section', {}, el('h2', {}, 'Profiles'), ...profiles,
+      el('div', { class: 'row' }, newName, el('button', { disabled: st.profiles.length >= 8, onclick: async () => { try { draw(await api('/api/admin/profiles', { action: 'add', name: newName.value })); toast('Profile added'); } catch (x) { toast(x.message); } } }, 'Add a profile'))),
+    el('section', {}, el('h2', {}, 'Devices'), el('p', {}, 'Every browser and TV signed in to this server. Signing one out ends its access at once.'), ...devices,
+      el('div', { class: 'row' }, el('button', { onclick: async () => { const r = await api('/api/admin/pair', {}); codeBox.hidden = false; codeBox.replaceChildren(el('p', {}, 'On the TV: Settings, Link to a Dholphin server. Enter this address and code; it works once, for ten minutes.'), el('b', {}, r.origin), el('span', { class: 'code' }, r.code)); } }, 'Link a TV')), codeBox),
+    el('section', {}, el('h2', {}, 'Household password'), el('div', { class: 'grid' }, el('label', {}, 'Current password', oldPw), el('label', {}, 'New password, 8 characters or more', newPw)),
+      el('div', { class: 'row' }, el('button', { onclick: async () => { try { await api('/api/admin/password', { old: oldPw.value, password: newPw.value }); toast('Password changed'); oldPw.value = newPw.value = ''; } catch (x) { toast(x.message); } } }, 'Change the password'))),
+    el('section', {}, el('h2', {}, 'Cache'), el('p', {}, 'Film data and pictures kept on the server. Emptying it is safe: it fills again as people browse.'),
+      el('div', { class: 'row' }, el('button', { onclick: async () => { await api('/api/admin/cache', {}); toast('Cache emptied'); } }, 'Empty the cache'), el('button', { onclick: async () => { await api('/api/logout', {}); start(); } }, 'Sign out of the panel'))),
+  );
+}
+start().catch((x) => app.replaceChildren(el('p', { class: 'err' }, x.message)));
+</script>
+</body>
+</html>

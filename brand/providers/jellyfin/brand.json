@@ -1,0 +1,88 @@
+{
+  "name": "Jellyfin",
+  "domain": "jellyfin.org",
+  "claimed": false,
+  "colors": [
+    {
+      "hex": "#007ca6",
+      "type": "accent",
+      "brightness": 101
+    },
+    {
+      "hex": "#000b25",
+      "type": "dark",
+      "brightness": 11
+    },
+    {
+      "hex": "#ffffff",
+      "type": "light",
+      "brightness": 255
+    },
+    {
+      "hex": "#965EC7",
+      "type": "brand",
+      "brightness": 113
+    },
+    {
+      "hex": "#0B9FDA",
+      "type": "brand",
+      "brightness": 132
+    },
+    {
+      "hex": "#6D75CC",
+      "type": "brand",
+      "brightness": 122
+    }
+  ],
+  "files": [
+    {
+      "file": "logo-light.svg",
+      "type": "logo",
+      "theme": "light",
+      "background": "transparent",
+      "width": 252
+    },
+    {
+      "file": "logo-light.png",
+      "type": "logo",
+      "theme": "light",
+      "background": "transparent",
+      "width": 800
+    },
+    {
+      "file": "logo-dark.png",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 820
+    },
+    {
+      "file": "logo-dark.svg",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 1536
+    },
+    {
+      "file": "icon-dark.jpeg",
+      "type": "icon",
+      "theme": "dark",
+      "background": null,
+      "width": 400
+    },
+    {
+      "file": "symbol-dark.svg",
+      "type": "symbol",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 72
+    },
+    {
+      "file": "symbol-dark.png",
+      "type": "symbol",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 800
+    }
+  ]
+}

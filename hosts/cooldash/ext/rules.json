@@ -1,0 +1,4 @@
+[
+  { "id": 1, "priority": 1, "action": { "type": "block" }, "condition": { "resourceTypes": ["main_frame"], "excludedRequestDomains": ["netflix.com"] } },
+  { "id": 2, "priority": 1, "action": { "type": "modifyHeaders", "requestHeaders": [{ "header": "referer", "operation": "set", "value": "https://dholphin.obncckjhgfhophihkofakhmfhjnpgcch/" }] }, "condition": { "requestDomains": ["youtube.com"], "resourceTypes": ["sub_frame"] } }
+]

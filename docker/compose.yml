@@ -1,0 +1,13 @@
+# Docs: docs/04 - Architecture/Server.md
+# Purpose: Dholphin's server at home: on a plain port of this machine, data in a Docker volume.
+# Start: docker compose -f docker/compose.yml up -d    The setup code: docker logs dholphin
+services:
+  dholphin:
+    # The published image (hub.docker.com/r/gandasdevstudio/dholphin); tools/build_server.sh builds dholphin:latest locally.
+    image: ${DHOLPHIN_IMAGE:-gandasdevstudio/dholphin:latest}
+    container_name: dholphin
+    restart: unless-stopped
+    ports: ["${DHOLPHIN_PORT:-8080}:8080"]
+    volumes: ["dholphin-data:/data"]
+volumes:
+  dholphin-data: {}

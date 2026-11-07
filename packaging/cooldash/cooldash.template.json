@@ -1,0 +1,22 @@
+{
+  "$schema": "https://cooldash.app/schemas/manifest-1.json",
+  "manifestVersion": 1,
+  "kind": "app",
+  "id": "dholphin",
+  "name": "Dholphin",
+  "version": "@@VERSION@@",
+  "dash": ">=0.42.0 <1.0.0",
+  "author": { "name": "CoolDash", "url": "https://cooldash.app" },
+  "description": "Everything you can watch, in one place, starting with what fits your taste: rows, top picks, categories, history and profiles. Netflix plays in its own player, which limits browsers on Linux to about 720p, and you need your own account. Your Jellyfin server plays here, and Seerr requests what it does not have. You need your own free TMDB key, and an OMDb key for Tomato scores. Needs a Raspberry Pi image of CoolDash OS. Not made by or linked to Netflix, Jellyfin, Seerr, TMDB or YouTube.",
+  "license": "MIT",
+  "icon": "icon.png",
+  "banner": "banner.png",
+  "tags": ["video", "movies", "series", "official"],
+  "native": {
+    "aarch64": { "exec": "native/aarch64/launch" }
+  },
+  "permissions": {
+    "network": ["api.themoviedb.org", "image.tmdb.org", "www.omdbapi.com", "query.wikidata.org", "commons.wikimedia.org", "upload.wikimedia.org", "thumb.wikimedia.org", "en.wikipedia.org", "fr.wikipedia.org", "es.wikipedia.org", "de.wikipedia.org", "it.wikipedia.org", "doblaje.fandom.com", "graphql.anilist.co", "s4.anilist.co", "api.jikan.moe", "cdn.myanimelist.net", "api.tvmaze.com", "static.tvmaze.com", "api.trakt.tv", "kgsearch.googleapis.com", "encrypted-tbn0.gstatic.com", "www.netflix.com", "nflxvideo.net", "nflximg.net", "nflxso.net", "www.youtube.com", "googlevideo.com", "ytimg.com"],
+    "lan": true
+  }
+}

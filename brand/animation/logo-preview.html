@@ -1,0 +1,134 @@
+<title>Dholphin Logo Motion</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<!-- Docs: docs/05 - UI-UX/Logo.md -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+<style>
+/* Layout: one large stage, with the timeline and controls under it, as in a motion review tool. Dark only: the product is. */
+:root{color-scheme:dark;--page:#0E0E10;--surface:#18181B;--raised:#26262B;--border:#3A3A41;--text:#F4F4F5;--muted:#A9A9B2;--accent:#E5232D;--ui:Inter,system-ui,sans-serif;
+  --stage:#0E0E10;--mark:#E5232D;--cut:#0E0E10;--word:#F4F4F5;--shine:#FFFFFF}
+.bg-red{--stage:#E5232D;--mark:#FFFFFF;--cut:#E5232D;--word:#FFFFFF;--shine:#E5232D}
+.bg-light{--stage:#F4F4F5;--mark:#E5232D;--cut:#F4F4F5;--word:#0E0E10;--shine:#FFFFFF}
+html,body{height:100%}
+body{background:var(--page);color:var(--text);font:400 16px/1.5 var(--ui);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px}
+main{max-width:1040px;margin:0 auto;display:grid;gap:16px}
+h1{font-size:24px;font-weight:700;margin:0;text-wrap:balance}
+.lead{margin:0;color:var(--muted)}
+.stage{background:var(--stage);border:1px solid var(--border);border-radius:8px;aspect-ratio:16/8;max-height:60vh;width:100%;display:grid;place-items:center;overflow:hidden;min-height:220px}
+.stage svg{width:min(70%,560px);height:auto;max-height:90%;overflow:visible}
+.stage.symbol svg{width:min(34%,280px)}
+#d{fill:var(--mark)}#dolphin{fill:var(--cut)}#word path{fill:var(--word)}#shine{fill:var(--shine);opacity:.28}
+#d,#dolphin,#word path,#mark{transform-box:fill-box;transform-origin:center}
+.timeline{background:var(--surface);border-radius:8px;padding:16px;display:grid;gap:12px}
+.time{display:flex;justify-content:space-between;gap:16px;font-variant-numeric:tabular-nums}
+.time span:last-child{color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0}
+ol{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 16px;font-size:14px}
+ol li{min-width:0;color:var(--muted);font-variant-numeric:tabular-nums}
+ol b{display:block;color:var(--text);font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:16px 24px;align-items:flex-end}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+legend{padding:0 0 4px;font-size:14px;color:var(--muted)}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+button{font:600 15px var(--ui);color:var(--text);background:var(--raised);border:1px solid var(--border);border-radius:8px;padding:8px 14px;min-height:40px;cursor:pointer;transition:transform 80ms ease-out}
+button:hover{background:#32323A}
+button:active{transform:scale(.96)}
+button:focus-visible,input:focus-visible{outline:3px solid #fff;outline-offset:2px}
+button[aria-pressed=true]{background:var(--text);color:var(--page);border-color:var(--text)}
+#replay{background:var(--accent);border-color:var(--accent);color:#fff}
+#replay:hover{background:#F23B44}
+@media (max-width:600px){ol{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+<main>
+  <h1>Dholphin start animation</h1>
+  <p class="lead">Concept A, Dolphin in the D. It plays when the app opens, then Home takes over.</p>
+  <div class="stage" id="stage" role="img" aria-label="The Dholphin logo: a red D, with a dolphin leaping into place inside it, and the name appearing beside it.">
+    <svg id="art" viewBox="0 0 830 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <defs><clipPath id="dclip"><path d="M40 32H120A96 96 0 0 1 120 224H40Z"/></clipPath></defs>
+      <g id="mark">
+        <path id="d" d="M40 32H120A96 96 0 0 1 120 224H40Z"/>
+        <g clip-path="url(#dclip)">
+          <path id="dolphin" d="M68 170A63 63 0 0 1 103.6 113.3C107.7 104.2 106.4 90.5 99.5 78C117.3 83.7 132.4 94.6 144.7 108.5A63 63 0 0 1 194 170A86 86 0 0 0 68 170Z"/>
+          <g transform="skewX(-20)"><rect id="shine" x="-40" y="0" width="44" height="256"/></g>
+        </g>
+      </g>
+      <g id="word"><path d="M294.5 177.2Q286.3 177.2 279.6 172.9Q273.0 168.7 269.1 160.4Q265.2 152.1 265.2 140.1Q265.2 127.8 269.2 119.5Q273.2 111.3 279.9 107.2Q286.5 103.0 294.5 103.0Q300.6 103.0 304.7 105.1Q308.7 107.2 311.2 110.2Q313.8 113.2 315.0 116.1H315.6V80.0H335.0V176.0H315.9V164.5H315.0Q313.7 167.4 311.1 170.3Q308.6 173.2 304.5 175.2Q300.5 177.2 294.5 177.2ZM300.5 161.7Q305.4 161.7 308.9 159.0Q312.4 156.3 314.2 151.4Q316.0 146.5 316.0 140.0Q316.0 133.5 314.2 128.7Q312.5 123.9 309.0 121.2Q305.5 118.5 300.5 118.5Q295.4 118.5 292.0 121.3Q288.6 124.1 286.8 128.9Q285.1 133.7 285.1 140.0Q285.1 146.4 286.8 151.2Q288.6 156.1 292.1 158.9Q295.5 161.7 300.5 161.7Z"/><path d="M369.5 134.3V176.0H350.1V80.0H369.1V117.8Q371.8 111.7 376.2 107.9Q381.9 103.0 391.1 103.0Q398.5 103.0 404.1 106.3Q409.7 109.5 412.8 115.6Q415.9 121.7 415.9 130.2V176.0H396.5V133.5Q396.5 126.8 393.0 123.0Q389.6 119.2 383.5 119.2Q379.4 119.2 376.2 121.0Q373.0 122.8 371.2 126.1Q369.5 129.5 369.5 134.3Z"/><path d="M463.2 177.4Q452.4 177.4 444.5 172.7Q436.5 168.1 432.3 159.7Q428.0 151.4 428.0 140.3Q428.0 129.1 432.3 120.7Q436.5 112.4 444.5 107.7Q452.4 103.0 463.2 103.0Q474.1 103.0 482.0 107.7Q489.9 112.4 494.2 120.7Q498.5 129.1 498.5 140.3Q498.5 151.4 494.2 159.7Q489.9 168.1 482.0 172.7Q474.1 177.4 463.2 177.4ZM463.2 162.2Q468.4 162.2 471.9 159.3Q475.3 156.5 477.1 151.5Q478.8 146.5 478.8 140.2Q478.8 133.8 477.1 128.9Q475.3 123.9 471.9 121.1Q468.4 118.2 463.2 118.2Q458.1 118.2 454.6 121.1Q451.2 123.9 449.4 128.9Q447.7 133.8 447.7 140.2Q447.7 146.5 449.4 151.5Q451.2 156.5 454.6 159.3Q458.1 162.2 463.2 162.2Z"/><path d="M530.0 80.0V176.0H510.6V80.0Z"/><path d="M545.1 202.9V103.9H564.1V116.1H565.0Q566.4 113.2 568.8 110.2Q571.3 107.2 575.4 105.1Q579.4 103.0 585.6 103.0Q593.6 103.0 600.2 107.2Q606.8 111.3 610.8 119.5Q614.8 127.8 614.8 140.1Q614.8 152.1 610.9 160.4Q607.0 168.7 600.4 172.9Q593.7 177.2 585.4 177.2Q579.6 177.2 575.5 175.2Q571.4 173.2 568.9 170.3Q566.4 167.4 565.0 164.5H564.4V202.9ZM579.5 161.7Q584.5 161.7 588.0 158.9Q591.4 156.1 593.2 151.2Q595.0 146.4 595.0 140.0Q595.0 133.7 593.2 128.9Q591.4 124.1 588.0 121.3Q584.6 118.5 579.5 118.5Q574.5 118.5 571.1 121.2Q567.6 123.9 565.8 128.7Q564.0 133.5 564.0 140.0Q564.0 146.5 565.8 151.4Q567.6 156.3 571.1 159.0Q574.6 161.7 579.5 161.7Z"/><path d="M646.3 134.3V176.0H627.0V80.0H645.9V117.8Q648.6 111.7 653.0 107.9Q658.7 103.0 667.9 103.0Q675.4 103.0 680.9 106.3Q686.5 109.5 689.6 115.6Q692.7 121.7 692.7 130.2V176.0H673.3V133.5Q673.3 126.8 669.9 123.0Q666.4 119.2 660.3 119.2Q656.2 119.2 653.0 121.0Q649.9 122.8 648.1 126.1Q646.3 129.5 646.3 134.3Z"/><path d="M707.8 176.0V103.9H727.2V176.0ZM717.5 94.5Q713.1 94.5 710.0 91.6Q706.9 88.7 706.9 84.6Q706.9 80.5 710.0 77.6Q713.1 74.7 717.5 74.7Q721.9 74.7 725.0 77.5Q728.1 80.4 728.1 84.6Q728.1 88.7 725.0 91.6Q721.9 94.5 717.5 94.5Z"/><path d="M761.6 134.3V176.0H742.3V103.9H760.5L760.8 118.8Q763.5 112.0 768.3 107.9Q774.1 103.0 783.2 103.0Q790.7 103.0 796.3 106.3Q801.8 109.5 804.9 115.6Q808.0 121.7 808.0 130.2V176.0H788.6V133.5Q788.6 126.8 785.2 123.0Q781.7 119.2 775.6 119.2Q771.5 119.2 768.4 121.0Q765.2 122.8 763.4 126.1Q761.6 129.5 761.6 134.3Z"/></g>
+    </svg>
+  </div>
+  <section class="timeline" aria-label="Timeline">
+    <div class="time"><span id="now">0 ms</span><span id="total"></span></div>
+    <input id="scrub" type="range" min="0" max="1000" step="1" value="1000" aria-label="Position in the animation">
+    <ol id="beats"></ol>
+  </section>
+  <div class="controls">
+    <button id="replay" type="button">Replay</button>
+    <fieldset><legend>Speed</legend><div class="seg" data-group="speed"><button type="button" data-v="1">Normal</button><button type="button" data-v="0.5">Half</button><button type="button" data-v="0.25">Quarter</button></div></fieldset>
+    <fieldset><legend>Version</legend><div class="seg" data-group="version"><button type="button" data-v="lockup">With name</button><button type="button" data-v="symbol">Symbol only</button></div></fieldset>
+    <fieldset><legend>Background</legend><div class="seg" data-group="bg"><button type="button" data-v="dark">Dark</button><button type="button" data-v="red">Red</button><button type="button" data-v="light">Light</button></div></fieldset>
+    <fieldset><legend>Motion</legend><div class="seg" data-group="motion"><button type="button" data-v="full">Full</button><button type="button" data-v="reduced">Reduced</button></div></fieldset>
+  </div>
+</main>
+<script>
+const OUT='cubic-bezier(0.16, 1, 0.3, 1)';
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const state={speed:1,version:'lockup',bg:'dark',motion:matchMedia('(prefers-reduced-motion: reduce)').matches?'reduced':'full'};
+let anims=[],raf=0,total=0;
+
+function spec(){
+  const letters=state.version==='lockup'?$$('#word path'):[];
+  if(state.motion==='reduced'){
+    const s=[[$('#mark'),[{opacity:0},{opacity:1}],{duration:200,delay:0,easing:'ease-out'}]];
+    letters.forEach(l=>s.push([l,[{opacity:0},{opacity:1}],{duration:200,delay:100,easing:'ease-out'}]));
+    s.push([$('#shine'),[{transform:'translateX(0)'},{transform:'translateX(0)'}],{duration:1,delay:0}]);
+    return {s,beats:[['Mark','0 to 200 ms, fade'],['Name','100 to 300 ms, fade'],['Leap','Off'],['Shine','Off']]};
+  }
+  const s=[
+    [$('#d'),[{opacity:0,transform:'scale(.92)'},{opacity:1,transform:'scale(1)'}],{duration:320,delay:0,easing:OUT}],
+    // The dolphin rises through the bottom of the D, passes its resting place, and settles.
+    [$('#dolphin'),[
+      {transform:'translate(-64px,132px) rotate(-40deg)',easing:'cubic-bezier(0.2,0.7,0.4,1)'},
+      {transform:'translate(-6px,-12px) rotate(5deg)',offset:.68,easing:'cubic-bezier(0.4,0,0.2,1)'},
+      {transform:'translate(0,0) rotate(0)'}],{duration:500,delay:180}],
+    [$('#shine'),[{transform:'translateX(0)'},{transform:'translateX(320px)'}],{duration:420,delay:640,easing:'cubic-bezier(0.4,0,0.2,1)'}],
+  ];
+  letters.forEach((l,i)=>s.push([l,[{opacity:0,transform:'translateY(14px)'},{opacity:1,transform:'none'}],{duration:280,delay:560+i*30,easing:OUT}]));
+  const beats=[['D appears','0 to 320 ms'],['Dolphin leaps','180 to 680 ms'],['Name rises','560 to 1050 ms'],['Shine sweeps','640 to 1060 ms']];
+  return {s,beats};
+}
+function build(){
+  anims.forEach(a=>a.cancel());
+  const {s,beats}=spec();
+  anims=s.map(([el,k,o])=>el.animate(k,{...o,fill:'both'}));
+  total=Math.max(...s.map(([,,o])=>o.delay+o.duration));
+  $('#scrub').max=total;
+  $('#total').textContent=total+' ms';
+  $('#beats').innerHTML=beats.map(([a,b])=>`<li><b>${a}</b>${b}</li>`).join('');
+}
+function show(t){ $('#scrub').value=t; $('#now').textContent=Math.round(t)+' ms'; }
+function tick(){
+  const t=Math.min(total,...anims.map(a=>a.playState==='running'?+a.currentTime:total));
+  const live=anims.filter(a=>a.playState==='running');
+  show(live.length?+live[0].currentTime:total);
+  if(live.length) raf=requestAnimationFrame(tick);
+}
+function play(){
+  cancelAnimationFrame(raf);build();
+  anims.forEach(a=>{a.playbackRate=state.speed;a.play();});
+  raf=requestAnimationFrame(tick);
+}
+function apply(){
+  $('#stage').className='stage '+state.version+' bg-'+state.bg;
+  $('#art').setAttribute('viewBox',state.version==='lockup'?'0 0 830 256':'0 0 256 256');
+  $('#word').style.display=state.version==='lockup'?'':'none';
+  $$('[data-group]').forEach(g=>{const key=g.dataset.group;g.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===String(state[key]))));});
+}
+$$('[data-group] button').forEach(b=>b.addEventListener('click',()=>{
+  const key=b.parentElement.dataset.group;state[key]=key==='speed'?+b.dataset.v:b.dataset.v;apply();play();
+}));
+$('#replay').addEventListener('click',play);
+$('#scrub').addEventListener('input',e=>{
+  cancelAnimationFrame(raf);const t=+e.target.value;
+  anims.forEach(a=>{a.pause();a.currentTime=t;});show(t);
+});
+apply();play();
+</script>

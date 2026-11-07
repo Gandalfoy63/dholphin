@@ -1,0 +1,80 @@
+{
+  "name": "Netflix",
+  "domain": "netflix.com",
+  "claimed": true,
+  "colors": [
+    {
+      "hex": "#E50914",
+      "type": "accent",
+      "brightness": 57
+    },
+    {
+      "hex": "#000000",
+      "type": "dark",
+      "brightness": 0
+    },
+    {
+      "hex": "#FFFFFF",
+      "type": "light",
+      "brightness": 255
+    }
+  ],
+  "files": [
+    {
+      "file": "logo-light.svg",
+      "type": "logo",
+      "theme": "light",
+      "background": "transparent",
+      "width": 326
+    },
+    {
+      "file": "logo-light.png",
+      "type": "logo",
+      "theme": "light",
+      "background": "transparent",
+      "width": 800
+    },
+    {
+      "file": "logo-light.webp",
+      "type": "logo",
+      "theme": "light",
+      "background": "transparent",
+      "width": 800
+    },
+    {
+      "file": "logo-dark.svg",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 326
+    },
+    {
+      "file": "logo-dark.png",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 800
+    },
+    {
+      "file": "logo-dark.webp",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 800
+    },
+    {
+      "file": "symbol-dark.png",
+      "type": "symbol",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 496
+    },
+    {
+      "file": "icon-dark.jpeg",
+      "type": "icon",
+      "theme": "dark",
+      "background": null,
+      "width": 400
+    }
+  ]
+}

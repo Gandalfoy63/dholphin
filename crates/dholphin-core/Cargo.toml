@@ -1,0 +1,13 @@
+[package]
+name = "dholphin-core"
+version = "0.6.1"
+edition = "2021"
+license = "MIT"
+description = "Dholphin's logic core: taste, ranking, TMDB and OMDb normalization. Native for tests, WASM in the app."
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,36 @@
+#!/bin/sh
+# Docs: docs/04 - Architecture/Platform Hosts.md
+# Purpose: starts Dholphin on CoolDash OS: Chromium in kiosk mode, with its interface as a bundled extension.
+# Based on CoolDash's streaming launcher. Chromium's own sandbox stays off because the app's systemd unit
+# forbids the namespaces it needs: the unit is the wall (decision in docs/07 - Security/Limits and Secrets.md).
+set -u
+HERE="$(dirname "$(readlink -f "$0")")"
+P="$HOME/browser"
+mkdir -p "$P/WidevineCdm" "$XDG_RUNTIME_DIR" 2>/dev/null
+chmod 700 "$XDG_RUNTIME_DIR" 2>/dev/null
+CHROMIUM="${DHOLPHIN_CHROMIUM:-/opt/chromium/chromium}"
+if [ ! -x "$CHROMIUM" ]; then
+  echo "Dholphin needs Chromium, and this CoolDash OS image has none" >&2
+  exit 1
+fi
+# Chromium writes the indexed rules.json into an unpacked extension's folder, and refuses the extension if it can't.
+# The package is read-only at /app, so it runs from a fresh copy in HOME. Without this: ERR_BLOCKED_BY_CLIENT.
+# Chromium opens its first page before the extension is ready, so the extension's own address would answer
+# ERR_BLOCKED_BY_CLIENT too. It starts on a black page, and background.js replaces it once the extension runs.
+EXT="$HOME/ext"
+# After an update a profile keeps running its cached old background.js, so a new package clears that cache once.
+if ! cmp -s "$HERE/ext/manifest.json" "$EXT/manifest.json"; then
+  rm -rf "$P/Default/Service Worker"
+fi
+rm -rf "$EXT"
+if ! cp -R "$HERE/ext" "$EXT" || ! chmod -R u+w "$EXT"; then
+  echo "Dholphin could not copy its interface to $EXT" >&2
+  exit 1
+fi
+printf '{"Path":"/opt/chromium/WidevineCdm"}' > "$P/WidevineCdm/latest-component-updated-widevine-cdm"
+export LD_LIBRARY_PATH=/opt/chromium/lib
+exec "$CHROMIUM" --ozone-platform=wayland --kiosk --no-first-run --noerrdialogs --disable-infobars --no-default-browser-check \
+  --enable-gpu-rasterization --ignore-gpu-blocklist --hide-crash-restore-bubble --password-store=basic \
+  --autoplay-policy=no-user-gesture-required --disable-features=Translate,MediaRouter,DisableLoadExtensionCommandLineSwitch \
+  --overscroll-history-navigation=0 --user-data-dir="$P" --no-sandbox --test-type \
+  --load-extension="$EXT" "data:text/html,<!--dholphin--><body style=background:black>"

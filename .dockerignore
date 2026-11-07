@@ -1,0 +1,12 @@
+# Docs: docs/04 - Architecture/Server.md
+# Purpose: what never goes into the server image: keys, captured sessions, other builds, the docs.
+.env
+*.har
+reference
+node_modules
+android
+crates/*/target
+target
+docs
+data
+.git

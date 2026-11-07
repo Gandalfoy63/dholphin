@@ -1,0 +1,63 @@
+<!doctype html>
+<!-- Docs: docs/04 - Architecture/Server.md -->
+<!-- Purpose: signing in to the web app with the household password, or setting it on a fresh server. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Dholphin</title>
+<style>
+:root{color-scheme:dark;--bg:#0E0E10;--surface:#18181B;--raised:#26262B;--border:#3A3A41;--text:#F4F4F5;--muted:#A9A9B2;--accent:#E5232D}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--text);font:18px/1.4 Inter,system-ui,sans-serif;padding:24px}
+main{width:min(420px,100%);display:grid;gap:18px}
+h1{margin:0;font-size:32px}
+p{margin:0;color:var(--muted)}
+label{display:grid;gap:8px;font-weight:600}
+input{font:inherit;padding:14px;border-radius:10px;border:2px solid var(--border);background:var(--surface);color:inherit}
+input:focus{outline:none;border-color:var(--text)}
+button{font:inherit;font-weight:700;padding:14px;border:0;border-radius:10px;background:var(--accent);color:#fff;cursor:pointer}
+button:focus-visible{outline:3px solid var(--text);outline-offset:2px}
+button:disabled{opacity:.5;cursor:wait}
+.err{color:#FCA5A5;min-height:1.4em}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>Dholphin</h1>
+  <p id="lead">Sign in with the household password.</p>
+  <form id="f">
+    <label id="codeRow" hidden>Setup code, from the server's log<input id="code" autocomplete="off" spellcheck="false"></label>
+    <label>Password<input id="pw" type="password" autocomplete="current-password" required minlength="8"></label>
+    <p class="err" id="err" role="alert"></p>
+    <button id="go" type="submit">Sign in</button>
+  </form>
+</main>
+<script>
+// A fresh server asks for the setup code from its log and a new password; afterwards, the password alone.
+const $ = (id) => document.getElementById(id);
+let setup = false;
+fetch('/api/status').then((r) => r.json()).then((s) => {
+  setup = s.setup;
+  if (setup) {
+    $('lead').textContent = 'Set the household password. Everyone in the home uses it to sign in here and in the panel.';
+    $('codeRow').hidden = false;
+    $('pw').autocomplete = 'new-password';
+    $('go').textContent = 'Set the password';
+  }
+});
+$('f').onsubmit = async (e) => {
+  e.preventDefault();
+  $('go').disabled = true;
+  $('err').textContent = '';
+  const body = setup ? { code: $('code').value.trim(), password: $('pw').value, name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser' } : { password: $('pw').value, name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser' };
+  const r = await fetch(setup ? '/api/setup' : '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (r.ok) return location.replace(location.pathname === '/panel' ? '/panel' : '/');
+  $('err').textContent = (await r.json().catch(() => ({}))).message ?? 'Something went wrong';
+  $('go').disabled = false;
+};
+</script>
+</body>
+</html>

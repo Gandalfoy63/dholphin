@@ -1,0 +1,52 @@
+{
+  "name": "Seerr",
+  "domain": "seerr.dev",
+  "claimed": false,
+  "colors": [
+    {
+      "hex": "#911AF9",
+      "type": "accent",
+      "brightness": 67
+    },
+    {
+      "hex": "#121512",
+      "type": "dark",
+      "brightness": 20
+    },
+    {
+      "hex": "#7330F8",
+      "type": "light",
+      "brightness": 77
+    }
+  ],
+  "files": [
+    {
+      "file": "logo-dark.png",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 820
+    },
+    {
+      "file": "logo-dark.svg",
+      "type": "logo",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 96
+    },
+    {
+      "file": "other-dark.svg",
+      "type": "other",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 322
+    },
+    {
+      "file": "other-dark.png",
+      "type": "other",
+      "theme": "dark",
+      "background": "transparent",
+      "width": 800
+    }
+  ]
+}

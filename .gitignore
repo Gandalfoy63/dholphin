@@ -1,0 +1,26 @@
+# Source zips stay on disk; their reviewed contents are committed (see docs/02 - Tech/Downloaded Docs Process.md)
+*.zip
+node_modules/
+dist/
+.venv/
+.env
+.env.*
+!.env.example
+# Netflix captures and live sessions must never be committed
+*.har
+secrets.*
+.firefox-lab/
+logs/
+target/
+# Generated from crates/dholphin-core by tools/build_wasm.sh
+web/public/dholphin_core.wasm
+web/dist/
+web/public/
+
+# Android build output and the machine-specific SDK path
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.jks
+*.keystore
