@@ -33,16 +33,20 @@ export function upstream(cacheDir, settings, fetcher = fetch) {
     const h = createHash('sha1').update(key).digest('hex');
     return join(cacheDir, name, h.slice(0, 2), `${h}.json`);
   };
-  async function call(name, rest, search, headers = {}) {
+  /**
+   * `clientKey`: a key the app sent itself, when it checks one typed during setup or in Settings. It is used for that
+   * one call instead of the server's, without the cache, so the check tests the key typed rather than the one kept.
+   */
+  async function call(name, rest, search, headers = {}, clientKey = null) {
     const up = UPSTREAMS[name];
-    const key = settings.data.keys?.[up.key];
+    const key = clientKey || settings.data.keys?.[up.key];
     if (!key) return { status: 503, body: JSON.stringify({ status_message: `No ${up.key} key on the server. Add it in the panel.` }), type: 'application/json' };
     const u = new URL(up.base + rest);
     for (const [k, v] of new URLSearchParams(search)) if (!up.drop.includes(k)) u.searchParams.append(k, v);
     u.searchParams.sort();
     const cacheKey = u.toString() + (headers.accept ?? '');
     const f = file(name, cacheKey);
-    const hit = existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
+    const hit = !clientKey && existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : null;
     if (hit && Date.now() - hit.at < maxAge(name, rest)) return hit;
     const h = { Accept: 'application/json' };
     up.add(u, key, h);
@@ -50,7 +54,7 @@ export function upstream(cacheDir, settings, fetcher = fetch) {
       const r = await fetcher(u, { headers: h, signal: AbortSignal.timeout(10_000) });
       const out = { at: Date.now(), status: r.status, body: await r.text(), type: r.headers.get('content-type') ?? 'application/json' };
       // Only good answers are kept; a refused key or a missing title isn't remembered.
-      if (r.ok) {
+      if (r.ok && !clientKey) {
         mkdirSync(dirname(f), { recursive: true });
         writeFileSync(`${f}.tmp`, JSON.stringify(out));
         renameSync(`${f}.tmp`, f);

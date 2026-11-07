@@ -53,7 +53,8 @@ async function readBody(req, max = 2_000_000) {
 }
 const cookieToken = (req) => /(?:^|;\s*)dh_s=([^;]+)/.exec(req.headers.cookie ?? '')?.[1] ?? null;
 const bearer = (req) => /^Bearer (.+)$/.exec(req.headers.authorization ?? '')?.[1] ?? null;
-const who = (req) => deviceByToken(state, bearer(req) ?? cookieToken(req));
+// A bearer that isn't a device's token (a TMDB read token being checked) falls back to the cookie.
+const who = (req) => deviceByToken(state, bearer(req)) ?? deviceByToken(state, cookieToken(req));
 const sessionCookie = (req, token) => `dh_s=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${secure(req) ? '; Secure' : ''}`;
 
 // ---------- the relay to Jellyfin and Seerr ----------
@@ -249,7 +250,9 @@ async function handle(req, res) {
     // The film data services, keys added here.
     if ((m = /^\/api\/(tmdb\/3|omdb|trakt|kg)(\/.*)?$/.exec(p))) {
       const name = m[1] === 'tmdb/3' ? 'tmdb' : m[1];
-      const r = await up.call(name, m[2] && m[2] !== '/' ? m[2] : '', url.search);
+      // A key the app sent itself (a check of one just typed) is used for that call; the placeholder never is.
+      const sent = url.searchParams.get({ tmdb: 'api_key', omdb: 'apikey', kg: 'key' }[name] ?? '') ?? (name === 'tmdb' && !deviceByToken(state, bearer(req)) ? bearer(req) : null);
+      const r = await up.call(name, m[2] && m[2] !== '/' ? m[2] : '', url.search, {}, sent && sent !== 'server' ? sent : null);
       return send(res, r.status, r.body, r.type);
     }
     // The panel's own calls.

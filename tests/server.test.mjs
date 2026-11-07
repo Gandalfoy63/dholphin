@@ -77,6 +77,18 @@ describe('server', () => {
     await call('/api/tmdb/3/movie/1?api_key=server&language=fr-FR', { cookie });
     expect(upstreamCalls).toHaveLength(1);
   });
+  it('checks a key the app sends with that key, not the server\'s, and keeps nothing from it', async () => {
+    upstreamCalls.length = 0;
+    await call('/api/tmdb/3/movie/1?api_key=typed-key', { cookie });
+    await call('/api/tmdb/3/movie/1?api_key=typed-key', { cookie });
+    expect(upstreamCalls.map((c) => new URL(c.url).searchParams.get('api_key'))).toEqual(['typed-key', 'typed-key']);
+    // A TMDB read token sent as a bearer is a key to check, not a device: the cookie still signs in.
+    upstreamCalls.length = 0;
+    const longToken = 'x'.repeat(80);
+    const r = await realFetch(`${base}/api/tmdb/3/movie/1`, { headers: { Cookie: cookie, Authorization: `Bearer ${longToken}` } });
+    expect(r.status).toBe(200);
+    expect(upstreamCalls[0].headers.Authorization).toBe(`Bearer ${longToken}`);
+  });
   it('relays a local Seerr through a secret path, with its key added by the server', async () => {
     await call('/api/admin/settings', { method: 'POST', cookie, body: { seerr: 'http://192.168.1.20:5055', seerrKey: 'seerr-secret', relay: 'auto' } });
     const store = await (await call('/api/store?prefix=prov:jellyfin:', { cookie })).json();
