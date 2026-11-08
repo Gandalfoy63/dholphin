@@ -96,7 +96,7 @@ export async function openDetails(input: Title, from?: HTMLElement | null, why?:
     const on = await app.library.toggleList(t);
     const b = $('#dl', text);
     b.setAttribute('aria-pressed', String(on));
-    b.querySelector('use')!.setAttribute('href', `./icons.svg#i-${on ? 'check' : 'plus'}`);
+    b.querySelector('use')!.setAttribute('href', `#i-${on ? 'check' : 'plus'}`);
     toast(tr(on ? 'Added {name} to My List' : 'Removed {name} from My List', { name: t.name }));
   };
   // Like, Love and Not for me: one rating at a time; pressing the one that is on takes it off.

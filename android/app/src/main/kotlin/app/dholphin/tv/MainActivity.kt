@@ -4,6 +4,7 @@ package app.dholphin.tv
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.webkit.WebResourceRequest
@@ -15,6 +16,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
@@ -49,7 +53,8 @@ class MainActivity : ComponentActivity() {
             if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
             webViewClient = object : WebViewClientCompat() {
                 override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
-                    assets.shouldInterceptRequest(request.url)
+                    if (request.url.host == HOST && request.url.encodedPath?.startsWith(HTTP_IMAGE) == true) httpImage(request.url)
+                    else assets.shouldInterceptRequest(request.url)
 
                 // The page never navigates away from itself: a link out (such as "Watch on YouTube") goes nowhere.
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
@@ -97,7 +102,32 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 
+    /**
+     * A picture on a plain http:// server (a Dholphin server or Jellyfin at home), fetched here and handed to the page
+     * as its own https address: the WebView then has no mixed content to block or upgrade. Pictures only.
+     * Called off the UI thread. Docs: Android/WebViewClient, Android/WebResourceResponse, Android/HttpURLConnection.
+     */
+    private fun httpImage(url: Uri): WebResourceResponse {
+        val none = WebResourceResponse("text/plain", null, 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
+        val rest = url.encodedPath!!.removePrefix(HTTP_IMAGE)
+        val cut = rest.indexOf('/')
+        if (cut <= 0) return none
+        val target = Uri.decode(rest.substring(0, cut)) + rest.substring(cut) + (url.encodedQuery?.let { "?$it" } ?: "")
+        if (!target.startsWith("http://")) return none
+        return runCatching {
+            val c = (URL(target).openConnection() as HttpURLConnection).apply { connectTimeout = 8000; readTimeout = 15000; instanceFollowRedirects = true }
+            val type = c.contentType?.substringBefore(';')?.trim() ?: ""
+            if (c.responseCode !in 200..299 || !type.startsWith("image/")) {
+                c.disconnect()
+                none
+            } else WebResourceResponse(type, null, 200, "OK", mapOf("Cache-Control" to "public, max-age=31536000, immutable"), c.inputStream)
+        }.getOrDefault(none)
+    }
+
     companion object {
+        const val HOST = "appassets.androidplatform.net"
+        /** `<origin>/http-image/<encoded http base>/<rest>`: see `viaApp` in the page. */
+        const val HTTP_IMAGE = "/http-image/"
         const val ORIGIN = "https://appassets.androidplatform.net"
         const val START = "$ORIGIN/assets/web/index.html"
     }

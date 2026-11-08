@@ -147,7 +147,9 @@ export class Catalog {
     const [source, get] = this.sourceFor(list);
     const cands = await cached(this.store, `ext:${list}`, 6 * HOUR, get);
     const found: Title[] = [];
-    for (let i = 0; i < cands.length; i += 4) {
+    // A row shows twenty: matching stops at thirty found, which leaves room for repeats and titles resting. TVmaze's
+    // schedule alone lists well over a hundred shows a day, each a search on a first visit.
+    for (let i = 0; i < cands.length && found.length < 30; i += 4) {
       const part = await Promise.all(cands.slice(i, i + 4).map((c) => this.match(c).catch(() => null)));
       found.push(...part.filter((t): t is Title => !!t));
     }
@@ -633,7 +635,7 @@ export class Catalog {
     return this.scores(await this.details(t));
   }
 
-  image(path: string | null | undefined, size: 'w185' | 'w300' | 'w500' | 'w780' | 'w1280' = 'w780'): string | null {
+  image(path: string | null | undefined, size: 'w185' | 'w300' | 'w342' | 'w500' | 'w780' | 'w1280' = 'w780'): string | null {
     if (!path) return null;
     if (/^(https?:|\/api|\.\/|data:)/.test(path)) return path;
     return `${this.endpoints.images}/${size}${path}`;

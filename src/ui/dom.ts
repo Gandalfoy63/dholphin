@@ -3,9 +3,26 @@
 export const $ = <T extends HTMLElement = HTMLElement>(s: string, r: ParentNode = document) => r.querySelector(s) as T;
 export const $$ = <T extends HTMLElement = HTMLElement>(s: string, r: ParentNode = document) => [...r.querySelectorAll(s)] as T[];
 export const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-export const ico = (n: string, c = '') => `<svg class="ic ${c}" aria-hidden="true"><use href="./icons.svg#i-${n}"></use></svg>`;
+/** An icon from the sprite, which `loadIcons` puts in the page once (an outside sprite was fetched again and again). */
+export const ico = (n: string, c = '') => `<svg class="ic ${c}" aria-hidden="true"><use href="#i-${n}"></use></svg>`;
+export async function loadIcons() {
+  const svg = await fetch('./icons.svg').then((r) => (r.ok ? r.text() : ''), () => '');
+  if (!svg || document.getElementById('icons')) return;
+  document.body.insertAdjacentHTML('afterbegin', svg.replace('<svg ', '<svg id="icons" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden" '));
+}
 export const plogo = (file: string) => `<img class="plogo" src="./providers/${file}" alt="">`;
 export const TV = () => $('#tv');
+
+/** The Android app's page is https; a server at home is often plain http, and the WebView may block or upgrade its pictures. */
+const IN_APP = typeof window !== 'undefined' && location.protocol === 'https:' && location.host === 'appassets.androidplatform.net';
+/** A picture's address as the page should load it: on Android, an http one goes through the app (MainActivity.httpImage). */
+export const viaApp = (u: string): string => (IN_APP ? throughApp(u, location.origin) : u);
+/** `http://host:port/path?q` as `<app>/http-image/<encoded http://host:port>/path?q`; anything else as it is. */
+export function throughApp(u: string, app: string): string {
+  if (!u.startsWith('http://')) return u;
+  const x = new URL(u);
+  return `${app}/http-image/${encodeURIComponent(x.origin)}${x.pathname === '/' ? '' : x.pathname}${x.search}`;
+}
 
 // A long, soft ease out: quick to answer the key, then a slow settle. Every duration is stretched by K, as CSS does
 // with --k, so the whole app keeps one tempo.

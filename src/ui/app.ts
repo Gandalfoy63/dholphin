@@ -7,6 +7,7 @@ import { Engine } from '@/core/engine';
 import { Library } from '@/core/library';
 import { idbStore, routedStore, serverStore, type Store } from '@/core/store';
 import type { Availability, Host, Profile, Provider, ProviderContext, Title } from '@/sdk/types';
+import { viaApp } from './dom';
 
 /** The film data keys. Only TMDB is needed; each other one adds a source. All are free. */
 export interface Keys { tmdb?: string; omdb?: string; trakt?: string; google?: string }
@@ -64,6 +65,7 @@ class App {
       this.server = { panel: `${link.origin}/panel`, origin: link.origin, linked: true };
     }
     this.endpoints = { ...DEFAULT_ENDPOINTS, ...this.config.endpoints };
+    this.endpoints.images = viaApp(this.endpoints.images);
     // Film data caches stay on the device in every mode.
     this.catalog = new Catalog(device, this.endpoints);
     await this.catalog.registry.load();

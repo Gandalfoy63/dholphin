@@ -21,6 +21,9 @@ export class Engine {
   private trending = new Set<string>();
   availability: (t: Title) => number = () => 0.4;
   private tasteAt = 0;
+  /** Each title's affinity for the current taste, by key: a title is scored once until the taste changes. */
+  private scored = new Map<string, number>();
+  private scoredFor = -1;
   /** Drawn once per launch: rows and picks shift a little each time the app starts, and stay put while it runs. */
   private readonly session = Math.floor(Math.random() * 2 ** 31);
   /** A stable number in [0, 1) for a title in this launch. */
@@ -100,7 +103,14 @@ export class Engine {
    */
   async affinity(titles: Title[]): Promise<Map<string, number>> {
     await this.ensureTaste();
-    const base = new Map(call<[string, number][]>('affinity', { taste: this.taste, titles }));
+    // Scores depend on the title and the taste only, so rows don't send the taste and the same titles again and again.
+    if (this.scoredFor !== this.tasteAt) {
+      this.scored.clear();
+      this.scoredFor = this.tasteAt;
+    }
+    const fresh = titles.filter((t) => !this.scored.has(t.key));
+    if (fresh.length) for (const [k, v] of call<[string, number][]>('affinity', { taste: this.taste, titles: fresh })) this.scored.set(k, v);
+    const base = new Map(titles.map((t): [string, number] => [t.key, this.scored.get(t.key) ?? 0]));
     const people = Object.values(await this.library.people());
     for (const p of people) {
       const d = p.rating === 'love' ? 0.08 : p.rating === 'like' ? 0.05 : -0.15;

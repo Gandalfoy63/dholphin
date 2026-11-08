@@ -110,7 +110,9 @@ SOURCES = {
         "App Signing": "studio/publish/app-signing", "Build Configuration": "build", "Version Your App": "studio/publish/versioning",
         "Network Security Config": "privacy-and-security/security-config",
         "WebSettings": "reference/android/webkit/WebSettings", "Pixel Densities": "training/multiscreen/screendensities",
-        "Network Service Discovery": "develop/connectivity/wifi/use-nsd", "NsdManager": "reference/android/net/nsd/NsdManager"}),
+        "Network Service Discovery": "develop/connectivity/wifi/use-nsd", "NsdManager": "reference/android/net/nsd/NsdManager",
+        "WebResourceResponse": "reference/android/webkit/WebResourceResponse", "WebViewClient": "reference/android/webkit/WebViewClient",
+        "HttpURLConnection": "reference/java/net/HttpURLConnection"}),
     "GitHub": ("REST 2022-11-28", "https://docs.github.com/en", {
         "Releases API": "rest/releases/releases", "Release Assets API": "rest/releases/assets"}),
     "GitHub CLI": ("current", "https://cli.github.com/manual", {

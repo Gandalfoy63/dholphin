@@ -8,7 +8,7 @@ import '@fontsource/inter/latin-800.css';
 import { loadCore } from './core/wasm';
 import type { Profile, Title } from './sdk/types';
 import { app } from './ui/app';
-import { A, $, fitTv, logoMark, logoStart, TV, toast, FADE_OUT } from './ui/dom';
+import { A, $, fitTv, loadIcons, logoMark, logoStart, TV, toast, FADE_OUT } from './ui/dom';
 import { installKeys, nav } from './ui/focus';
 import { LANGUAGES, setLocale, t } from './ui/i18n';
 import { openDetails } from './ui/details';
@@ -69,6 +69,7 @@ async function showStart() {
 
 async function boot() {
   fitTv();
+  await loadIcons();
   installKeys();
   try {
     await loadCore();

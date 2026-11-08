@@ -2,7 +2,7 @@
 // Purpose: a hero and rows of cards. Rows load on their own, and an empty row hides itself.
 import type { Title } from '@/sdk/types';
 import { app } from './app';
-import { $, $$, A, FADE, RISE, TV, cascade, esc, ico, plogo } from './dom';
+import { $, $$, A, FADE, RISE, TV, cascade, esc, ico, plogo, viaApp } from './dom';
 import { focusRow, go, nav } from './focus';
 import { t as tr } from './i18n';
 import { schedulePreview } from './preview';
@@ -32,7 +32,10 @@ const ageHtml = (t: Title) => (t.certification ? `<span class="tag">${esc(t.cert
  * What focus reveals. Posters carry the name in their art: a chip at the top right with stars, Tomato, year and age.
  * Wide cards: stars and Tomato at the top right, the name with the age at the bottom.
  */
-const overlay = (t: Title, poster: boolean) => `<span class="ov"><span class="scores">${scoresHtml(t)}</span></span>${poster ? `<span class="oa">${t.year ? `<span class="oy">${t.year}</span>` : ''}${ageHtml(t)}</span>` : ''}`;
+const overlay = (t: Title, poster: boolean) => {
+  const s = scoresHtml(t);
+  return `<span class="ov${s ? '' : ' none'}"><span class="scores">${s}</span></span>${poster ? `<span class="oa">${t.year ? `<span class="oy">${t.year}</span>` : ''}${ageHtml(t)}</span>` : ''}`;
+};
 const nameHtml = (t: Title) => `<span class="ct"><span class="cn">${esc(t.name)}</span><span class="ca">${ageHtml(t)}</span></span>`;
 
 /**
@@ -40,9 +43,14 @@ const nameHtml = (t: Title) => `<span class="ct"><span class="cn">${esc(t.name)}
  * slide (transform) rather than scroll, and some TV browsers then never see a picture come into view. Only cards far
  * along a row start `lazy`, and `wake` loads them as focus nears.
  */
-export function artHtml(t: Title, size: 'w500' | 'w780' | 'w1280' = 'w500', prefer: 'backdrop' | 'poster' = 'backdrop', eager = true) {
-  const src = app.catalog.image(prefer === 'backdrop' ? t.backdrop ?? t.poster : t.poster ?? t.backdrop, size);
-  return src ? `<img class="art" src="${esc(src)}" alt="" loading="${eager ? 'eager' : 'lazy'}" decoding="async">` : '<span class="noart"></span>';
+const JF_WIDTH = { w300: 400, w342: 360, w500: 500, w780: 800, w1280: 1280 } as const;
+export function artHtml(t: Title, size: 'w300' | 'w500' | 'w780' | 'w1280' = 'w500', prefer: 'backdrop' | 'poster' = 'backdrop', eager = true) {
+  // A card is 320 by 180 (posters 240 by 360): w300 backdrops and w342 posters are enough, a third of w500's weight.
+  const path = prefer === 'backdrop' ? t.backdrop ?? t.poster : t.poster ?? t.backdrop;
+  const want = size === 'w300' && path === t.poster ? 'w342' : size;
+  // Jellyfin resizes on request: its pictures are asked for at the card's size too, not 1280 wide.
+  const src = app.catalog.image(path, want)?.replace(/([?&]fillWidth=)\d+/, `$1${JF_WIDTH[want]}`);
+  return src ? `<img class="art" src="${esc(viaApp(src))}" alt="" loading="${eager ? 'eager' : 'lazy'}" decoding="async">` : '<span class="noart"></span>';
 }
 /** Loads a card's picture now if it was waiting. */
 const wake = (el: Element | undefined) => {
@@ -52,7 +60,7 @@ const wake = (el: Element | undefined) => {
 
 export function cardHtml(it: Item, attrs = '', poster = false, big = false, eager = true) {
   const t = it.title, art = !!(poster ? t.poster ?? t.backdrop : t.backdrop ?? t.poster);
-  return `<button class="f card ${poster ? 'poster' : ''} ${big ? 'big' : ''} ${art ? '' : 'named'} ${it.n ? 'ten' : ''}" type="button" ${attrs} aria-label="${esc(t.name)}" data-y="${t.year ?? ''}">${artHtml(t, big ? 'w780' : 'w500', poster ? 'poster' : 'backdrop', eager)}<span class="band"></span>${it.n ? `<span class="num">${it.n}</span>` : ''}${it.state ? `<span class="state ${it.state === 'Available' ? 'av' : it.state === 'Downloading' ? 'dl' : ''}">${esc(tr(it.state))}</span>` : ''}${!poster || !art ? nameHtml(t) : ''}${overlay(t, poster)}${it.progress ? `<span class="prog"><i style="transform:scaleX(${it.progress})"></i></span>` : ''}</button>`;
+  return `<button class="f card ${poster ? 'poster' : ''} ${big ? 'big' : ''} ${art ? '' : 'named'} ${it.n ? 'ten' : ''}" type="button" ${attrs} aria-label="${esc(t.name)}" data-y="${t.year ?? ''}">${artHtml(t, big ? 'w780' : 'w300', poster ? 'poster' : 'backdrop', eager)}<span class="band"></span>${it.n ? `<span class="num">${it.n}</span>` : ''}${it.state ? `<span class="state ${it.state === 'Available' ? 'av' : it.state === 'Downloading' ? 'dl' : ''}">${esc(tr(it.state))}</span>` : ''}${!poster || !art ? nameHtml(t) : ''}${overlay(t, poster)}${it.progress ? `<span class="prog"><i style="transform:scaleX(${it.progress})"></i></span>` : ''}</button>`;
 }
 /** Binds items to cards inside a container, in order. */
 export function bindCards(root: ParentNode, list: Item[], open: (it: Item, el: HTMLElement) => void) {
@@ -117,9 +125,12 @@ function neighbours(el: HTMLElement): HTMLElement[] {
     const cs = $$('.card', c.parentElement!), i = cs.indexOf(c);
     for (let d = -reach; d <= reach; d++) if (cs[i + d]) out.add(cs[i + d]!);
   };
-  if (el.classList.contains('card')) besides(el, 2);
+  if (el.classList.contains('card')) besides(el, 1);
+  // Only the rows just above and below are measured: measuring every card on the page forced a layout each time.
+  const row = el.closest('.row'), near = row ? [prevRow(row), nextRow(row)].filter((x): x is HTMLElement => !!x) : [];
+  if (!near.length) return [...out].filter((c) => c !== el);
   const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-  const cards = $$('.card', TV()).map((c) => ({ c, b: c.getBoundingClientRect() }));
+  const cards = near.flatMap((x) => $$('.card', x)).map((c) => ({ c, b: c.getBoundingClientRect() }));
   for (const dir of [-1, 1]) {
     let best: HTMLElement | null = null, score = Infinity;
     for (const { c, b } of cards) {
@@ -142,13 +153,48 @@ document.addEventListener('focusin', (e) => {
   aheadTimer = window.setTimeout(() => {
     if (document.activeElement !== el) return;
     for (const c of neighbours(el)) if (!primed.has(c)) void prime(c, false);
-  }, 120);
+  }, 250);
+});
+
+const isRow = (x: Element | null): x is HTMLElement => !!x && x.classList.contains('row') && !(x as HTMLElement).hidden;
+function prevRow(r: Element): HTMLElement | null {
+  let x = r.previousElementSibling;
+  while (x && !isRow(x)) x = x.previousElementSibling;
+  return x as HTMLElement | null;
+}
+function nextRow(r: Element): HTMLElement | null {
+  let x = r.nextElementSibling;
+  while (x && !isRow(x)) x = x.nextElementSibling;
+  return x as HTMLElement | null;
+}
+/**
+ * The row holding focus is marked `fr` (the rows below step down under its zoomed card), and rows far from it are
+ * marked `far`, which skips drawing them. Set here rather than with `:has(.card:focus)`, which made the browser
+ * check every row below on each move.
+ */
+let litRow: HTMLElement | null = null;
+document.addEventListener('focusin', (e) => {
+  const el = e.target as HTMLElement;
+  // Back up to the hero (the showcase): the page goes back to its top, or the hero stays above the screen.
+  const hero = el.closest?.('.hero'), sc = hero?.closest<HTMLElement>('.scroller');
+  if (sc && !nav.pointer) sc.style.transform = 'none';
+  const row = el.classList?.contains('card') ? el.closest<HTMLElement>('.row') : null;
+  if (row === litRow) return;
+  litRow?.classList.remove('fr');
+  litRow = row;
+  if (!row) return;
+  row.classList.add('fr');
+  const all = [...(row.parentElement?.children ?? [])].filter(isRow), at = all.indexOf(row);
+  all.forEach((x, k) => x.classList.toggle('far', Math.abs(k - at) > 3));
+  // The first pictures of the next two rows load before focus gets there.
+  for (const x of [all[at + 1], all[at + 2]]) if (x) $$('.card', x).slice(0, 7).forEach(wake);
 });
 
 function onCard(el: HTMLElement) {
   const row = el.closest<HTMLElement>('.row');
   if (row) {
-    const cards = $$('.card', row), i = cards.indexOf(el);
+    const cards = $$('.card', row), i = cards.indexOf(el), was = row.dataset.last === undefined || row.dataset.n !== String(cards.length) ? -1 : Number(row.dataset.last);
+    row.dataset.n = String(cards.length);
     row.dataset.last = String(i);
     let st = Number(row.dataset.start ?? 0);
     if (i < st) st = i;
@@ -158,10 +204,12 @@ function onCard(el: HTMLElement) {
     $('.track', row).style.transform = `translateX(${-st * STEP[shape]}px)`;
     // The pictures of the cards about to come into view load now.
     for (let j = i; j <= i + FITS[shape] + 2; j++) wake(cards[j]);
-    cards.forEach((c, j) => {
-      c.classList.toggle('bf', j < i);
-      c.classList.toggle('af', j > i);
-    });
+    // Only the cards between the old and the new place change side: fewer style changes on each move.
+    const from = was < 0 ? 0 : Math.min(was, i), to = was < 0 ? cards.length - 1 : Math.max(was, i);
+    for (let j = from; j <= to; j++) {
+      cards[j]!.classList.toggle('bf', j < i);
+      cards[j]!.classList.toggle('af', j > i);
+    }
     const s = row.closest<HTMLElement>('.scroller');
     if (s && !nav.pointer) s.style.transform = $('.chero', s) && row === $('.row:not([hidden])', s) ? 'none' : `translateY(${-(row.offsetTop - 80)}px)`;
   }
@@ -234,8 +282,9 @@ export function loadRows(root: HTMLElement, defs: RowDef[], open: (it: Item, el:
         row.classList.remove('loading');
         if (!def.logo) $('h2', row).textContent = def.heading;
         const track = $('.track', row);
-        // The first eight pictures of a row load at once; the rest as focus moves along it.
-        track.innerHTML = list.map((i, n) => cardHtml(i, '', def.poster, def.big, n < 8)).join('');
+        // The pictures on screen at first load at once; the rest as focus nears them (`wake`), so a TV doesn't fetch
+        // and decode a hundred pictures before it can answer the remote.
+        track.innerHTML = list.map((i, n) => cardHtml(i, '', def.poster, def.big, order < 3 && n < 7)).join('');
         bindCards(track, list, open);
         // Every row's cards arrive one by one as it fills (rows fill as they near the screen).
         cascade($$('.card', track).slice(0, 7), { step: 60 });

@@ -84,9 +84,11 @@ h1,h2,h3,p{margin:0}
 .card:focus{transform:scale(1.14);z-index:2;box-shadow:0 12px 32px rgba(0,0,0,.6)}
 .card.bf{transform:translateX(-24px)}.card.af{transform:translateX(24px)}
 /* A focused card grows past its row: the rows under it step down so it never covers their headings. */
-.row:has(.card:focus) ~ .row{translate:0 16px}
-.row.tall:has(.card:focus) ~ .row,.row.ranked:has(.card:focus) ~ .row{translate:0 30px}
-.row.big:has(.card:focus) ~ .row{translate:0 40px}
+.row.fr ~ .row{translate:0 16px}
+.row.tall.fr ~ .row,.row.ranked.fr ~ .row{translate:0 30px}
+.row.big.fr ~ .row{translate:0 40px}
+/* Rows far from focus aren't drawn while off screen (set in rows.ts): `auto`, so a jump to one still draws and focuses it. */
+.row.far{content-visibility:auto}
 .grid .card:focus{transform:scale(1.08)}
 /* The trailer preview takes the card's place: it hides, and the row makes room. */
 .card.pvon{opacity:0}
@@ -529,7 +531,7 @@ h1,h2,h3,p{margin:0}
 @media (prefers-reduced-motion:reduce){.pl-band,.pl-glow,.pl-av.av,.pl-w,.pl-dol,.pl-splash{animation:none}.pl-glow{opacity:.6}.pl-dol{transform:translate(294px,22px)}}
 .match{color:var(--ok);font-weight:700}
 .gsrc{font-size:.8em}
-.ov:has(.scores:empty){display:none}
+.ov.none{display:none}
 /* The end of a rows page: every title, in a grid, sorted for you or by grade. */
 .every{display:grid;gap:24px;padding:40px 64px 120px 64px}
 .every-head{display:flex;align-items:center;gap:32px}

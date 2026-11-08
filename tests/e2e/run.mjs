@@ -134,6 +134,17 @@ await press(p, 'Finish');
 await until(p, () => document.querySelector('.hero .hp'));
 check('Setup ends on Home, with a hero', true);
 {
+  await p.waitForTimeout(1500);
+  const im = await p.evaluate(() => {
+    const vis = [...document.querySelectorAll('#tv img.art')].filter((i) => { const b = i.getBoundingClientRect(); return b.width && b.right > 0 && b.bottom > 0 && b.left < innerWidth && b.top < innerHeight; });
+    const cards = [...document.querySelectorAll('.row .card img.art')].map((i) => i.getAttribute('src'));
+    return { vis: vis.length, ok: vis.filter((i) => i.complete && i.naturalWidth).length, small: cards.length && cards.every((s) => /\/w(300|342|780)\/|fillWidth=(400|360|800)&/.test(s)), bad: cards.filter((s) => !/\/w(300|342|780)\/|fillWidth=(400|360|800)&/.test(s)).slice(0, 4), sprite: !!document.querySelector('#icons symbol'), outside: document.querySelectorAll('use[href*="icons.svg"]').length };
+  });
+  check('Every picture on screen at Home has loaded', im.vis > 3 && im.ok === im.vis, JSON.stringify(im));
+  check('Row cards load small pictures (w300 backdrops, w342 posters, Jellyfin at the card\'s width)', !!im.small, JSON.stringify(im));
+  check('The icons come from one sprite in the page, not an outside file each time', im.sprite && im.outside === 0, JSON.stringify(im));
+}
+{
   const devices = Object.keys(await p.evaluate(() => fetch('/api/jf/_devices').then((r) => r.json())));
   const id = await p.evaluate(() => new Promise((ok) => { const r = indexedDB.open('dholphin-v2'); r.onsuccess = () => { const g = r.result.transaction(r.result.objectStoreNames[0]).objectStore(r.result.objectStoreNames[0]).get('profiles'); g.onsuccess = () => ok(g.result?.[0]?.id); }; }));
   check('The new profile keeps the Jellyfin sign-in made during setup, under its own DeviceId', !!id && devices.some((d) => d.endsWith(`-${id}`)), `${id} ${devices}`);
@@ -144,6 +155,27 @@ await shot(p, '08-home');
 const headings = await p.locator('.row:not([hidden])').evaluateAll((l) => l.filter((r) => r.querySelector('.card')).map((r) => r.querySelector('h2').textContent));
 console.log('      rows:', headings.join(' | '));
 for (const h of ['Top Picks for you', 'New Arrivals', 'Trending Now', 'Upcoming', 'Netflix', 'Jellyfin']) check(`Home has ${h}`, headings.includes(h));
+{
+  // Down two rows, then back up to the showcase: the page returns to its top and the showcase is in view.
+  await p.locator('.hero .hp').focus();
+  await key(p, 'ArrowDown');
+  await key(p, 'ArrowDown');
+  await p.waitForTimeout(500);
+  const down = await p.evaluate(() => document.querySelector('.scroller').style.transform);
+  await key(p, 'ArrowUp');
+  await key(p, 'ArrowUp');
+  await p.waitForTimeout(700);
+  const up = await p.evaluate(() => { const h = document.querySelector('.hero').getBoundingClientRect(), tv = document.querySelector('#tv').getBoundingClientRect(); return { inHero: !!document.activeElement.closest('.hero'), top: Math.round(h.top - tv.top), t: document.querySelector('.scroller').style.transform }; });
+  check('Going back up to the showcase brings it into view, without going to Home again', /translateY/.test(down) && up.inHero && up.top >= -2 && up.t === 'none', JSON.stringify({ down, ...up }));
+}
+{
+  // Rows far from the focused one aren't drawn; the focused row lets the ones below step down.
+  const back = await p.evaluate(() => document.activeElement?.className ?? '');
+  await p.locator('.row:not([hidden]) .card').first().focus();
+  const far = await p.evaluate(() => { const rows = [...document.querySelectorAll('.row:not([hidden])')]; return { n: rows.length, far: rows.filter((r) => r.classList.contains('far')).length, hidden: rows.filter((r) => getComputedStyle(r).contentVisibility === 'auto').length, fr: rows.findIndex((r) => r.classList.contains('fr')) }; });
+  check('Rows more than three away from focus are skipped while off screen, and the focused row is marked', far.n > 5 && far.far === far.n - 4 && far.hidden === far.far && far.fr === 0, JSON.stringify(far));
+  if (back.includes('hp')) await p.locator('.hero .hp').focus();
+}
 const bigCard = await p.locator('.row[data-row="new"] .card').first().boundingBox(), smallPoster = await p.locator('.row[data-row="top"] .card').first().boundingBox();
 check('New Arrivals are big posters', bigCard.height > bigCard.width * 1.4 && bigCard.width > smallPoster.width * 1.3, JSON.stringify([bigCard, smallPoster]));
 check('Empty rows hide themselves', await p.locator('.row[data-row="continue"]').evaluate((r) => r.hidden));
