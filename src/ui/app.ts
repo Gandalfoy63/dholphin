@@ -47,7 +47,8 @@ class App {
       const real = window.fetch.bind(window);
       window.fetch = (input, init = {}) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-        if (!url.startsWith(link.origin)) return real(input, init);
+        // The relay is reached by its secret path, and keeps the header the app set: Jellyfin's own sign-in.
+        if (!url.startsWith(link.origin) || url.startsWith(`${link.origin}/api/r/`)) return real(input, init);
         const headers = new Headers(init.headers);
         headers.set('Authorization', `Bearer ${link.token}`);
         return real(input, { ...init, headers });

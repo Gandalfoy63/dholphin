@@ -13,7 +13,7 @@ logo('providers/seerr/logo-dark.svg', 'providers/seerr.svg');
 logo('logo/web/favicon.svg', 'favicon.svg');
 // Chinese on the keyboard: pinyin to characters, built from Unicode's Unihan by tools/build_pinyin.py.
 copyFileSync(join(root, 'data/pinyin.json'), join(pub, 'pinyin.json'));
-const icons = 'eye mic-vocal user-round search house tv clapperboard sparkles layout-grid bookmark history inbox settings play info plus check star thumbs-up thumbs-down heart pencil lock delete rotate-ccw loader-circle arrow-up pause captions log-out trash-2 download globe rotate-cw gauge monitor-play list-video skip-forward circle-dashed clock'.split(' ');
+const icons = 'eye mic-vocal user-round search house tv clapperboard sparkles layout-grid bookmark history inbox settings play info plus check star thumbs-up thumbs-down heart pencil lock delete rotate-ccw loader-circle arrow-up pause captions log-out trash-2 download globe rotate-cw gauge monitor-play list-video skip-forward circle-dashed clock server'.split(' ');
 const symbols = icons.map((name) => {
   const svg = readFileSync(join(root, 'node_modules/lucide-static/icons', `${name}.svg`), 'utf8');
   const inner = svg.match(/<svg[^>]*>([\s\S]*)<\/svg>/)[1].replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ').trim();

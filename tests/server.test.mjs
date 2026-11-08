@@ -39,7 +39,8 @@ let cookie = '';
 
 describe('server', () => {
   it('starts asking for a password, and only with the setup code from its log', async () => {
-    expect((await (await call('/api/status')).json()).setup).toBe(true);
+    const st = await (await call('/api/status')).json();
+    expect([st.setup, st.app]).toEqual([true, 'dholphin']);
     expect((await call('/api/setup', { method: 'POST', body: { code: 'WRONG', password: 'longenough' } })).status).toBe(403);
     expect((await call('/api/setup', { method: 'POST', body: { code: state.setupCode, password: 'short' } })).status).toBe(400);
     const r = await call('/api/setup', { method: 'POST', body: { code: state.setupCode, password: 'household-pass' } });

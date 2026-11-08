@@ -189,7 +189,7 @@ async function handle(req, res) {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Max-Age': '600' }); return res.end(); }
 
   // Open to all: the state of the server, first setup, signing in, pairing, pictures, the relay (by its secret).
-  if (p === '/api/status') return json(200, { version: VERSION, setup: !state.settings.data.password, webApp: state.settings.data.webApp, signedIn: !!who(req) });
+  if (p === '/api/status') return json(200, { app: 'dholphin', version: VERSION, setup: !state.settings.data.password, webApp: state.settings.data.webApp, signedIn: !!who(req) });
   if (p === '/api/setup' && req.method === 'POST') {
     const b = await readBody(req, 10_000);
     if (state.settings.data.password) return json(409, { message: 'A password is already set' });

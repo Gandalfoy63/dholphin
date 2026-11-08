@@ -17,7 +17,7 @@ import { profileLoader, showProfiles } from './ui/profiles';
 import { takeReturn } from './ui/returning';
 import { checkForUpdate } from './ui/update';
 import { showShell } from './ui/shell';
-import { waitForServerSetup } from './ui/serverlink';
+import { setUpWhere, waitForServerSetup } from './ui/serverlink';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -44,7 +44,7 @@ async function finishSetup(p: Profile, picks: Title[]) {
   void loading.done();
   toast(t('Welcome, {name}', { name: p.name }));
 }
-/** Services connected during setup belong to the new profile. */
+/** Services connected during a setup begun before 0.33.4, under the old shared id `setup`, go to the new profile. */
 async function adoptSetupLinks(p: Profile) {
   for (const k of await app.store.keys('prov:')) {
     if (k.endsWith(':link:setup')) {
@@ -103,6 +103,8 @@ async function boot() {
   // The logo plays on the first run only; after that, the profile is what loads, with its own picture.
   // Linked to a server that has no profile yet: its panel's code, to set it up from a phone or a computer.
   if (app.server?.linked && !app.profiles.length) return waitForServerSetup(() => undefined, () => setup());
+  // The web app on a server with no profile yet: set it up here, or leave it to a TV.
+  if (app.server && !app.profiles.length) return setUpWhere(() => setup());
   if (!(await app.setupDone()) || !app.profiles.length) {
     await showStart();
     return setup();

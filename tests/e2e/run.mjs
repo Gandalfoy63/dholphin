@@ -70,6 +70,9 @@ check('The first screen offers the languages', (await p.locator('[data-lang]').c
 await until(p, () => document.activeElement?.id === 'nx');
 await shot(p, '02-welcome');
 await key(p, 'Enter');
+await until(p, () => document.querySelector('#malone'));
+check('First, it asks how this device runs: a server by its address, or on its own (no network search in a browser)', !!(await p.locator('#maddr').count()) && !(await p.locator('#scan').count()));
+await p.locator('#malone').click();
 
 await until(p, () => document.querySelector('#fld-tmdb'));
 check('Without keys it asks for them', await p.locator('#nx').isDisabled());
@@ -111,6 +114,7 @@ await p.locator('#cg').focus();
 await key(p, 'Enter');
 await until(p, () => !document.querySelector('.modal') && document.querySelector('.prov[data-p="jellyfin"] .st')?.textContent.includes('Connected'));
 check('Jellyfin connects', true);
+check('Setup signs in to Jellyfin with a DeviceId of the profile being made, not one shared by every setup', Object.keys(await p.evaluate(() => fetch('/api/jf/_devices').then((r) => r.json()))).every((d) => !d.endsWith('-setup')));
 await press(p, 'Continue');
 
 await until(p, () => document.querySelectorAll('.taste .tc[data-t]').length === 18);
@@ -129,6 +133,11 @@ await press(p, 'Finish');
 
 await until(p, () => document.querySelector('.hero .hp'));
 check('Setup ends on Home, with a hero', true);
+{
+  const devices = Object.keys(await p.evaluate(() => fetch('/api/jf/_devices').then((r) => r.json())));
+  const id = await p.evaluate(() => new Promise((ok) => { const r = indexedDB.open('dholphin-v2'); r.onsuccess = () => { const g = r.result.transaction(r.result.objectStoreNames[0]).objectStore(r.result.objectStoreNames[0]).get('profiles'); g.onsuccess = () => ok(g.result?.[0]?.id); }; }));
+  check('The new profile keeps the Jellyfin sign-in made during setup, under its own DeviceId', !!id && devices.some((d) => d.endsWith(`-${id}`)), `${id} ${devices}`);
+}
 await until(p, () => document.querySelectorAll('.row:not([hidden]) .card').length > 20);
 await p.waitForTimeout(600);
 await shot(p, '08-home');
@@ -857,10 +866,13 @@ console.log('Android TV, with a stand-in for the app');
       openApp: (url, pk, ex) => (call('openApp', url, pk, ex), 'ok'),
       phoneStart: (title, f) => (call('phoneStart', title, f), JSON.stringify({ url: 'http://192.168.1.50:41234/p/abc', qr: 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 2 2%22%3E%3Crect width=%221%22 height=%221%22/%3E%3C/svg%3E' })),
       phoneStop: () => call('phoneStop'),
+      localAddresses: () => '["192.168.77.2"]',
       installUpdate: (url) => { call('installUpdate', url); setTimeout(() => { emit({ t: 'update', pct: 50 }); emit({ t: 'update', result: 'started' }); }, 100); },
       exit: () => call('exit'),
     };
   });
+  // The home network as the TV sees it: one Dholphin server at 192.168.77.10:8080, nothing else answers.
+  await actx.route(/^http:\/\/192\.168\.77\.\d+(:\d+)?\/api\/status$/, (r) => (r.request().url() === 'http://192.168.77.10:8080/api/status' ? r.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({ app: 'dholphin', version: '9.9.9' }) }) : r.abort()));
   const a = await actx.newPage();
   watch(a);
   await a.goto(URL_);
@@ -875,10 +887,19 @@ console.log('Android TV, with a stand-in for the app');
   await until(a, () => !document.querySelector('.modal.upd'));
   await until(a, () => document.activeElement?.id === 'nx');
   await key(a, 'Enter');
+  await until(a, () => document.querySelector('[data-srv]') && document.querySelector('#scan b')?.textContent === 'Search done', null);
+  await shot(a, '30b-android-find-server');
+  check('On first run the TV looks for Dholphin servers on its network and lists what it finds', (await a.locator('[data-srv]').count()) === 1 && (await a.locator('[data-srv]').getAttribute('data-srv')) === 'http://192.168.77.10:8080' && (await a.locator('#found').innerText()).includes('192.168.77.10:8080 · 9.9.9'));
+  check('A server found is focused first', await a.evaluate(() => document.activeElement?.dataset.srv === 'http://192.168.77.10:8080'));
+  await a.locator('[data-srv]').click();
+  await until(a, () => document.querySelector('#fld-origin'));
+  check('Choosing it fills its address and asks only for the code', (await a.locator('#fld-origin').inputValue()) === 'http://192.168.77.10:8080' && (await a.evaluate(() => document.activeElement?.id)) === 'fld-code');
+  await a.locator('#lcn').click();
+  await a.locator('#malone').click();
   await until(a, () => document.querySelector('.phone .qrbox img'));
   await a.waitForTimeout(300);
   await shot(a, '31-android-keys-qr');
-  const ps = calls.find((c) => c.m === 'phoneStart');
+  const ps = calls.findLast((c) => c.m === 'phoneStart');
   check('The key step shows a QR code for typing on a phone', !!ps && JSON.parse(ps.a[1]).map((f) => f.key).join() === 'tmdb,omdb,trakt,google' && (await a.locator('.purl').textContent()).startsWith('http://192.168'));
   await a.evaluate(() => dispatchEvent(new CustomEvent('dholphin', { detail: { t: 'phone', values: { tmdb: 'good-key', omdb: 'x' } } })));
   await until(a, () => document.querySelector('.nm'));
@@ -989,9 +1010,11 @@ console.log('Dholphin server');
   const tv = await tctx.newPage();
   watch(tv);
   await tv.goto(URL_);
-  await until(tv, () => document.querySelector('#lnk'));
-  check('A TV on its own says, at the start, that it can link to a Dholphin server', (await tv.locator('#lnk').textContent()).includes('Link to a Dholphin server'));
-  await tv.locator('#lnk').click();
+  await until(tv, () => document.activeElement?.id === 'nx');
+  await key(tv, 'Enter');
+  await until(tv, () => document.querySelector('#maddr'));
+  check('A TV on its own asks, at the start, whether it runs with a Dholphin server', (await tv.locator('#maddr').textContent()).includes('Enter the address'));
+  await tv.locator('#maddr').click();
   await until(tv, () => document.querySelector('#fld-origin'));
   await tv.fill('#fld-origin', '127.0.0.1:8800');
   await tv.fill('#fld-code', pairCode);
@@ -1001,6 +1024,23 @@ console.log('Dholphin server');
   await tv.waitForTimeout(300);
   await shot(tv, '41-server-setup-wait');
   check('Linked to a server without a profile, the TV shows its panel\'s address', (await tv.locator('.purl').textContent()) === `${S}/panel`, await tv.locator('.purl').textContent());
+
+  // The web app on a server without profiles: set up here, or leave it to a TV with a code.
+  {
+    const c = await browser.newContext({ viewport: { width: 1600, height: 900 } });
+    const w = await c.newPage();
+    watch(w);
+    await w.goto(`${S}/`);
+    await until(w, () => document.querySelector('#pw'));
+    await w.fill('#pw', 'household-pass');
+    await w.locator('#go').click();
+    await until(w, () => document.querySelector('#ontv'));
+    await w.locator('#ontv').click();
+    await until(w, () => /^\d{6}$/.test(document.querySelector('.tvc')?.textContent ?? ''));
+    await w.screenshot({ path: join(OUT, '41b-server-web-set-up-on-tv.png') });
+    check('The web app can leave the setup to a TV: it shows the address and a code to link it', (await w.locator('.purl').textContent()) === S);
+    await c.close();
+  }
 
   // The panel adds a profile: the TV moves on by itself, and loads Home through the server.
   await pp.getByLabel('New profile name').fill('Sam');
@@ -1028,6 +1068,21 @@ console.log('Dholphin server');
   await until(web, () => document.querySelector('#srvp'));
   check('With the web app, the server panel is in Settings', (await web.locator('#srvp').textContent()) === 'Server panel');
   await web.screenshot({ path: join(OUT, '43-server-web-settings.png') });
+
+  // Jellyfin at a local address, relayed by the server: Sam signs in from the panel, and the linked TV is connected as Sam.
+  const sam = await pp.evaluate(async (jf) => {
+    const st = await (await fetch('/api/admin/settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ jellyfin: jf, relay: 'auto' }) })).json();
+    const id = st.profiles.find((x) => x.name === 'Sam').id;
+    const r = await fetch('/api/admin/jellyfin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ profileId: id, user: 'sam', password: 'pw' }) });
+    return r.status;
+  }, `${D}/api/jf`);
+  check('The panel signs Sam in to Jellyfin', sam === 200, String(sam));
+  await tv.reload();
+  await tv.waitForFunction(() => document.querySelector('.hero .hp') && !document.querySelector('.pload'), null, { timeout: 30000 });
+  await tv.evaluate(() => document.querySelector('[data-go="settings"]').click());
+  await until(tv, () => document.querySelector('.prov [data-p="jellyfin"]'));
+  const jfRow = await tv.locator('.prov', { has: tv.locator('[data-p="jellyfin"]') }).innerText();
+  check('On a linked TV, Jellyfin through the relay keeps its own sign-in: Sam is connected', jfRow.includes('Connected') && !jfRow.includes('Not connected'), jfRow);
   srv.kill();
   await Promise.all([pctx.close(), tctx.close(), wctx.close()]);
 }
@@ -1040,6 +1095,18 @@ for (const [width, height] of [[1280, 900], [2560, 1080], [800, 1200]]) {
   await until(q, () => document.querySelector('#tv').children.length);
   const r = await q.evaluate(() => { const b = document.querySelector('#tv').getBoundingClientRect(); return { l: b.left, t: b.top, r: innerWidth - b.right, b: innerHeight - b.bottom }; });
   check(`Centred and inside a ${width}x${height} window`, Math.abs(r.l - r.r) < 2 && Math.abs(r.t - r.b) < 2 && r.l >= -1 && r.t >= -1, JSON.stringify(r));
+  await c.close();
+}
+
+{
+  // A 4K Android TV's WebView: a dense screen, so a narrow window in CSS pixels. The screen fits it, no zoom.
+  const c = await browser.newContext({ viewport: { width: 960, height: 540 }, deviceScaleFactor: 4, isMobile: true });
+  const q = await c.newPage();
+  await q.goto(URL_);
+  await until(q, () => document.querySelector('.onb .lead'));
+  await q.waitForTimeout(800);
+  const r = await q.evaluate(() => { const b = document.querySelector('#tv').getBoundingClientRect(); return { w: innerWidth, l: b.left, t: b.top, r: innerWidth - b.right, b: innerHeight - b.bottom }; });
+  check('On a dense 4K screen the app fits the screen instead of zooming past its edges', r.w === 960 && Math.abs(r.l) < 2 && Math.abs(r.r) < 2 && Math.abs(r.t) < 2 && Math.abs(r.b) < 2, JSON.stringify(r));
   await c.close();
 }
 

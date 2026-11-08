@@ -23,9 +23,9 @@ export function normalizeOrigin(raw: string): string | null {
 }
 
 /** Links this TV: the address and the six-digit code from the server's panel. The app starts again, on the server. */
-export function linkServer(after?: () => void) {
+export function linkServer(after?: () => void, origin = '') {
   const ret = document.activeElement as HTMLElement | null;
-  TV().insertAdjacentHTML('beforeend', `<div class="modal"><div class="panel" style="justify-items:start;gap:16px"><h2 style="font-size:36px">${t('Link to a Dholphin server')}</h2><p class="muted" style="max-width:900px">${t('The server keeps the keys, the profiles and their history for every device. In its panel, choose Link a TV: it shows its address and a code.')}</p><div class="${app.host.phoneForm ? 'withphone' : ''}"><div class="stack">${fieldsHtml([{ key: 'origin', label: 'Server address', placeholder: '192.168.1.20:8080' }, { key: 'code', label: 'Code' }])}${keyboardHtml()}</div>${phoneHtml()}</div><div class="err" role="alert"></div><div class="btns"><button class="f btn pri" id="lgo" type="button">${t('Link')}</button><button class="f btn" id="lcn" type="button">${t('Cancel')}</button></div></div></div>`);
+  TV().insertAdjacentHTML('beforeend', `<div class="modal"><div class="panel" style="justify-items:start;gap:16px"><h2 style="font-size:36px">${t('Link to a Dholphin server')}</h2><p class="muted" style="max-width:900px">${t('The server keeps the keys, the profiles and their history for every device. In its panel, choose Link a TV: it shows its address and a code.')}</p><div class="${app.host.phoneForm ? 'withphone' : ''}"><div class="stack">${fieldsHtml([{ key: 'origin', label: 'Server address', placeholder: '192.168.1.20:8080', value: origin }, { key: 'code', label: 'Code' }])}${keyboardHtml()}</div>${phoneHtml()}</div><div class="err" role="alert"></div><div class="btns"><button class="f btn pri" id="lgo" type="button">${t('Link')}</button><button class="f btn" id="lcn" type="button">${t('Cancel')}</button></div></div></div>`);
   const m = $('.modal:last-child', TV());
   A($('.panel', m), [{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 240 });
   const read = bindFields(m);
@@ -57,7 +57,7 @@ export function linkServer(after?: () => void) {
       b.textContent = t('Link');
     }
   };
-  go($('.field input', m));
+  go($(origin ? '#fld-code' : '.field input', m) ?? $('.field input', m));
 }
 
 /** Unlinks this TV: it goes back to keeping its own data, from before it was linked. */
@@ -93,3 +93,40 @@ export async function waitForServerSetup(onReady: () => void, setUpHere: () => v
   go($('#here'));
   void onReady;
 }
+
+/**
+ * The web app on a server with no profile yet: set it up here, or on a TV. For a TV, a code to link it, renewed before
+ * it runs out; the page moves on by itself once the TV (or anyone) has made a profile.
+ */
+export function setUpWhere(setUpHere: () => void) {
+  TV().innerHTML = `<div class="onb"><div class="obody" style="justify-content:center;gap:28px"><h1>${t('Set up Dholphin')}</h1><p class="lead">${t('This server has no profile yet. Make the first one here, or on a TV: the profiles are kept here for every device.')}</p><div class="stack"><div class="prov"><span class="plogos">${ico('monitor-play')}</span><div class="i"><b>${t('Set up here')}</b><span class="muted">${t('Profile, services and taste, in this browser')}</span></div><button class="f btn pri" id="here" type="button">${t('Set up here')}</button></div><div class="prov"><span class="plogos">${ico('tv')}</span><div class="i"><b>${t('Set up on a TV')}</b><span class="muted">${t('The TV links to this server with a code, then makes the profiles')}</span></div><button class="f btn" id="ontv" type="button">${t('Show a code')}</button></div></div><div id="tvcode"></div></div></div>`;
+  let renew: ReturnType<typeof setInterval> | undefined;
+  const poll = setInterval(async () => {
+    const r = (await fetch(`${app.config.store}?prefix=profiles`).then((x) => (x.ok ? x.json() : {})).catch(() => ({}))) as { profiles?: unknown[] };
+    if (r.profiles?.length) {
+      clearInterval(poll);
+      clearInterval(renew);
+      location.reload();
+    }
+  }, 5000);
+  const showCode = async () => {
+    const box = $('#tvcode');
+    if (!box) return;
+    const r = (await fetch('/api/admin/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((x) => (x.ok ? x.json() : null)).catch(() => null)) as { code?: string; origin?: string } | null;
+    if (!r?.code) return void (box.innerHTML = `<p class="err" role="alert">${t('The server could not make a code. Try again.')}</p>`);
+    box.innerHTML = `<div class="phone"><div class="pi"><b>${t('On the TV')}</b><span class="muted">${t('Open Dholphin, choose this server in the list or enter its address, then this code. It works once, for ten minutes; a new one comes before then.')}</span><span class="purl">${esc(r.origin ?? location.origin)}</span><span class="tvc" style="font-size:56px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums">${esc(r.code)}</span></div></div>`;
+    A(box, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 280 });
+  };
+  $('#here').onclick = () => {
+    clearInterval(poll);
+    clearInterval(renew);
+    setUpHere();
+  };
+  $('#ontv').onclick = async () => {
+    await showCode();
+    clearInterval(renew);
+    renew = setInterval(() => void showCode(), 9 * 60_000);
+  };
+  go($('#here'));
+}
+

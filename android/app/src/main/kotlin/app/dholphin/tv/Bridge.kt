@@ -9,6 +9,8 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.webkit.JavascriptInterface
 import org.json.JSONArray
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import org.json.JSONObject
 
 /**
@@ -52,6 +54,13 @@ class Bridge(private val activity: Activity, private val send: (JSONObject) -> U
 
     /** A QR code (PNG data address) of a short text, such as the server panel's address. */
     @JavascriptInterface fun qr(text: String): String = if (text.length in 1..512) phone.qr(text) else ""
+
+    /** This TV's private IPv4 addresses, so the page can look for a Dholphin server on the same networks. */
+    @JavascriptInterface fun localAddresses(): String = runCatching {
+        JSONArray(NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback }
+            .flatMap { it.inetAddresses.toList() }.filterIsInstance<Inet4Address>().filter { it.isSiteLocalAddress }
+            .mapNotNull { it.hostAddress }).toString()
+    }.getOrDefault("[]")
 
     /** Downloads and installs a newer version of this app. Progress and the result come back as `update` events. */
     @JavascriptInterface fun installUpdate(url: String) = updater.install(url)

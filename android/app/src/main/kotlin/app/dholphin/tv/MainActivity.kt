@@ -41,6 +41,10 @@ class MainActivity : ComponentActivity() {
                 // Jellyfin and Seerr on the home network are often plain http://.
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 userAgentString = "$userAgentString DholphinTV/${BuildConfig.VERSION_NAME}"
+                // The page scales itself to the screen: no text size from the system, no zoom of its own. Docs: Android/WebSettings.
+                textZoom = 100
+                setSupportZoom(false)
+                builtInZoomControls = false
             }
             if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
             webViewClient = object : WebViewClientCompat() {

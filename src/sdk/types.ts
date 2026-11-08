@@ -127,6 +127,8 @@ export interface Host {
   };
   /** A QR code image (data address) of a short text, where the device can draw one. */
   qr?(text: string): Promise<string | null>;
+  /** The device's own private IPv4 addresses, to look for a Dholphin server on the same networks. */
+  localAddresses?(): Promise<string[]>;
   /** Updates of the app itself, where the device installs them. */
   updater?: { version: string; build: number; install(url: string, onProgress: (pct: number) => void): Promise<'started' | 'needs_permission' | 'failed'> };
   cookie(url: string, name: string): Promise<string | null>;

@@ -107,6 +107,8 @@ const jfEpisode = (t, n) => ({ Id: `ep${t.id}-${n}`, Name: `Episode ${n}`, Type:
 
 /** What the player asked of the stand-in, for the tests to read at /api/jf/_log. */
 const jfLog = [];
+const jfTokens = new Map(); // DeviceId to its one token.
+let jfSignIns = 0;
 const SEC = 10_000_000;
 /** Two audio tracks; English and French text subtitles; picture subtitles the server would draw in. */
 const jfStreams = (id) => [
@@ -131,8 +133,18 @@ function jellyfin(path, q, req, res, send, body = '') {
   const list = T.filter((t) => t.jf);
   if (path === '/_log') return send(jfLog);
   if (path === '/System/Info/Public') return send({ ServerName: 'Test', Version: '12.3.0' });
-  if (path === '/Users/AuthenticateByName') return send({ User: { Id: 'u1', Name: 'tester' }, AccessToken: 'tok', ServerId: 's' });
-  if (path === '/Users/Me') return req.headers.authorization?.includes('Token=') ? send({ Id: 'u1', Name: 'tester' }) : send({}, 401);
+  // As the real server: one token per DeviceId, so a second sign-in on the same DeviceId ends the first.
+  if (path === '/_devices') return send(Object.fromEntries(jfTokens));
+  if (path === '/Users/AuthenticateByName') {
+    const device = /DeviceId="([^"]*)"/.exec(req.headers.authorization ?? '')?.[1] ?? '';
+    const token = `tok${++jfSignIns}`;
+    jfTokens.set(decodeURIComponent(device), token);
+    return send({ User: { Id: 'u1', Name: 'tester' }, AccessToken: token, ServerId: 's' });
+  }
+  if (path === '/Users/Me') {
+    const token = /Token="([^"]*)"/.exec(req.headers.authorization ?? '')?.[1];
+    return token && [...jfTokens.values()].includes(token) ? send({ Id: 'u1', Name: 'tester' }) : send({}, 401);
+  }
   if (path.startsWith('/Sessions/Playing')) jfLog.push({ path, ...JSON.parse(body || '{}') });
   if (path === '/Sessions/Logout' || path.startsWith('/Sessions/Playing')) return send({}, 204);
   if (path === '/Items/Latest') return send(list.slice(0, 8).map(jfItem));

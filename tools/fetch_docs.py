@@ -108,7 +108,9 @@ SOURCES = {
         "Unknown App Sources": "reference/android/provider/Settings#ACTION_MANAGE_UNKNOWN_APP_SOURCES",
         "FileProvider": "reference/androidx/core/content/FileProvider",
         "App Signing": "studio/publish/app-signing", "Build Configuration": "build", "Version Your App": "studio/publish/versioning",
-        "Network Security Config": "privacy-and-security/security-config"}),
+        "Network Security Config": "privacy-and-security/security-config",
+        "WebSettings": "reference/android/webkit/WebSettings", "Pixel Densities": "training/multiscreen/screendensities",
+        "Network Service Discovery": "develop/connectivity/wifi/use-nsd", "NsdManager": "reference/android/net/nsd/NsdManager"}),
     "GitHub": ("REST 2022-11-28", "https://docs.github.com/en", {
         "Releases API": "rest/releases/releases", "Release Assets API": "rest/releases/assets"}),
     "GitHub CLI": ("current", "https://cli.github.com/manual", {

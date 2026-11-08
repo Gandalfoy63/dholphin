@@ -73,6 +73,7 @@ interface AndroidBridge {
   phoneStart(title: string, fieldsJson: string): string;
   phoneStop(): void;
   qr?(text: string): string;
+  localAddresses?(): string;
   installUpdate(url: string): void;
   exit(): void;
 }
@@ -102,6 +103,7 @@ function android(b: AndroidBridge): Host {
     takeExternalReport: async () => null,
     close: () => b.exit(),
     qr: b.qr ? async (text: string) => b.qr!(text) || null : undefined,
+    localAddresses: b.localAddresses ? async () => JSON.parse(b.localAddresses!() || '[]') as string[] : undefined,
     phoneForm: {
       async start(title: string, fields: PhoneField[], onValues: (v: Record<string, string>) => void) {
         phoneOff?.();

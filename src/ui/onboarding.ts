@@ -12,13 +12,14 @@ import { saveReturn, setReturnContext } from './returning';
 import { bindPhone, phoneHtml } from './phone';
 import { actorButton, actorLabel, avatar } from './profiles';
 import { linkServer } from './serverlink';
+import { candidates, findServers } from '@/core/discover';
 import { pickActor } from './actors';
 
-export interface ObState { name: string; color: string; photo?: string; photoOf?: string; picks: Title[]; language: string; region: string; maturity: string; addOnly?: boolean }
+export interface ObState { id?: string; name: string; color: string; photo?: string; photoOf?: string; picks: Title[]; language: string; region: string; maturity: string; addOnly?: boolean }
 const REGIONS: [string, string][] = [['FR', 'France'], ['US', 'United States'], ['GB', 'United Kingdom'], ['DE', 'Germany'], ['ES', 'Spain'], ['BE', 'Belgium'], ['CA', 'Canada']];
 const MATURITY = ['All', '12+', '16+', '18+'];
 const newOb = (): ObState => {
-  return { name: '', color: COLORS[2]!, picks: [], language: getLocale(), region: navigator.language.split('-')[1]?.toUpperCase() ?? 'US', maturity: '18+' };
+  return { id: newId(4), name: '', color: COLORS[2]!, picks: [], language: getLocale(), region: navigator.language.split('-')[1]?.toUpperCase() ?? 'US', maturity: '18+' };
 };
 let ob = newOb();
 const STEPS = 6;
@@ -28,6 +29,7 @@ const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : '');
 export function startOnboarding(done: (p: Profile, picks: Title[]) => void, opts: { addOnly?: boolean; resume?: { step: number; ob: ObState } } = {}) {
   finishCb = done;
   ob = opts.resume?.ob ?? { ...newOb(), addOnly: opts.addOnly };
+  ob.id ??= newId(4);
   render(opts.resume?.step ?? (opts.addOnly ? 2 : 0), 1);
 }
 
@@ -40,8 +42,7 @@ function render(n: number, dir: number) {
   A(o, [{ opacity: 0, transform: `translateX(${dir * 24}px)` }, { opacity: 1, transform: 'none' }], { duration: 320 });
   go($('[data-first]', o) ?? focusables(o)[0]);
   nav.onBack = () => {
-    const prev = n === 4 && ob.addOnly ? 2 : n - 1;
-    if (n > (ob.addOnly ? 2 : 0)) step(n, prev);
+    if (n > (ob.addOnly ? 2 : 0)) step(n, n - 1);
   };
 }
 function step(from: number, to: number) {
@@ -54,9 +55,7 @@ const foot = (enabled = true, label = t('Continue')) => `<div class="ofoot"><but
 function welcome(o: HTMLElement, n: number) {
   o.style.alignItems = 'center';
   o.style.justifyContent = 'center';
-  o.innerHTML = `<div style="display:flex;gap:32px;align-items:center" id="wl"><span style="width:220px;display:block">${logoMark()}</span><span style="font-size:112px;font-weight:700;letter-spacing:-.01em">dholphin</span></div><p class="lead" style="text-align:center">${t('Everything you can watch, in one place, starting with what fits your taste.')}</p><div class="btns" role="group" aria-label="${t('Language')}">${LANGUAGES.map(([c, l]) => `<button class="f chip" type="button" data-lang="${c}" aria-pressed="${c === ob.language}">${l}</button>`).join('')}</div>${app.server ? '' : `<p class="muted" style="text-align:center">${t('Have a Dholphin server at home? It can keep the profiles and keys for every device.')} <button class="f btn" id="lnk" type="button">${ico('globe', 's')}${t('Link to a Dholphin server')}</button></p>`}${foot(true, t('Get started'))}`;
-  const lnk = $('#lnk', o);
-  if (lnk) lnk.onclick = () => linkServer();
+  o.innerHTML = `<div style="display:flex;gap:32px;align-items:center" id="wl"><span style="width:220px;display:block">${logoMark()}</span><span style="font-size:112px;font-weight:700;letter-spacing:-.01em">dholphin</span></div><p class="lead" style="text-align:center">${t('Everything you can watch, in one place, starting with what fits your taste.')}</p><div class="btns" role="group" aria-label="${t('Language')}">${LANGUAGES.map(([c, l]) => `<button class="f chip" type="button" data-lang="${c}" aria-pressed="${c === ob.language}">${l}</button>`).join('')}</div>${foot(true, t('Get started'))}`;
   $$('[data-lang]', o).forEach((c) => (c.onclick = async () => {
     await chooseLanguage(c.dataset.lang!);
     render(n, 1);
@@ -65,7 +64,47 @@ function welcome(o: HTMLElement, n: number) {
   $('#nx', o).dataset.first = '1'; // OK moves on. The languages are one press up.
   logoStart($('#wl', o));
   A($('#wl span:last-child', o), [{ opacity: 0, transform: 'translateY(14px)' }, { opacity: 1, transform: 'none' }], { duration: 320, delay: 560 });
-  $('#nx', o).onclick = () => step(n, app.hasKeys() ? 2 : 1);
+  // Not on a server yet: first, where this device keeps its data.
+  $('#nx', o).onclick = () => (app.server ? step(n, app.hasKeys() ? 2 : 1) : chooseMode(o, n));
+}
+
+/**
+ * How this device runs: with a Dholphin server (found on the network, or by its address) or on its own. Where the
+ * device gives its own addresses (Android), the servers on the same networks are looked for and listed as found.
+ */
+function chooseMode(o: HTMLElement, n: number) {
+  const ac = new AbortController();
+  const leave = (then: () => void) => {
+    ac.abort();
+    then();
+  };
+  const row = (icon: string, title: string, sub: string, btn: string, attrs: string, pri = false) =>
+    `<div class="prov"><span class="plogos">${icon}</span><div class="i"><b>${title}</b><span class="muted">${sub}</span></div><button class="f btn${pri ? ' pri' : ''}" type="button" ${attrs}>${btn}</button></div>`;
+  const scans = !!app.host.localAddresses;
+  o.style.alignItems = '';
+  o.style.justifyContent = '';
+  o.innerHTML = `<h1>${t('How will this TV run?')}</h1><p class="lead">${t('A Dholphin server keeps the profiles, keys and history for every device. On its own, this TV keeps them itself.')}</p><div class="stack" id="modes"><div id="found" class="stack"></div>${scans ? `<div class="prov" id="scan"><span class="plogos">${ico('loader-circle', 's spin')}</span><div class="i"><b>${t('Looking for Dholphin servers on your network')}</b><span class="muted">${t('This takes a few seconds')}</span></div></div>` : ''}${row(ico('globe'), t('Enter a server address'), t('At home or on the internet, with a code from its panel'), t('Enter the address'), 'id="maddr"')}${row(ico('tv'), t('Use this TV on its own'), t('Profiles and keys stay on this TV. You can link a server later in Settings.'), t('Use on its own'), 'id="malone"')}</div>`;
+  A(o, [{ opacity: 0, transform: 'translateX(24px)' }, { opacity: 1, transform: 'none' }], { duration: 320 });
+  $('#maddr', o).onclick = () => linkServer(() => undefined);
+  $('#malone', o).onclick = () => leave(() => step(n, app.hasKeys() ? 2 : 1));
+  nav.onBack = () => leave(() => render(n, -1));
+  go($('#maddr', o));
+  if (!scans) return;
+  void app.host.localAddresses!().then((own) => findServers(candidates(own), (s) => {
+    const list = $('#found', o);
+    if (!list?.isConnected) return;
+    list.insertAdjacentHTML('beforeend', row(ico('server'), t('Dholphin server'), esc(`${s.origin.replace(/^https?:\/\//, '')}${s.version ? ` · ${s.version}` : ''}`), t('Link'), `data-srv="${esc(s.origin)}"`, true));
+    const b = $<HTMLButtonElement>(`[data-srv="${CSS.escape(s.origin)}"]`, list);
+    b.onclick = () => linkServer(() => undefined, s.origin);
+    A(b.closest('.prov')!, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 280 });
+    if (list.children.length === 1) go(b);
+  }, { signal: ac.signal })).then((all) => {
+    const sc = $('#scan', o);
+    if (!sc?.isConnected || ac.signal.aborted) return;
+    sc.querySelector('.plogos')!.innerHTML = ico(all.length ? 'check' : 'search');
+    sc.querySelector('b')!.textContent = all.length ? t('Search done') : t('No Dholphin server found on this network');
+    sc.querySelector('.muted')!.textContent = all.length ? t('Choose one to link this TV') : t('Enter its address, or use this TV on its own');
+  });
 }
 
 async function chooseLanguage(code: string) {
@@ -124,7 +163,7 @@ function who(o: HTMLElement, n: number) {
     $('#pa', o).outerHTML = face();
     $('#act', o).innerHTML = actorLabel(ob.photoOf);
   };
-  $('#nx', o).onclick = () => step(n, ob.addOnly ? 4 : n + 1);
+  $('#nx', o).onclick = () => step(n, n + 1);
 }
 /** The profile's picture as set so far: the actor's photo, else the colour and initial. */
 const face = () => avatar({ name: cap(ob.name) || '?', color: ob.color, photo: ob.photo }).replace('class="av ', 'id="pa" class="av ');
@@ -175,8 +214,11 @@ export async function connectProvider(p: Provider, profile: Profile, after: () =
 /** What a service's button says: connecting for accounts, switching for a service whose own app holds the account. */
 export const actionLabel = (p: Provider, connected: boolean) => t(p.onOff?.() ? (connected ? 'Turn off' : 'Turn on') : connected ? 'Disconnect' : 'Connect');
 
-/** Who connects services during setup: a provisional profile that the real one reuses. */
-export const provisional = (): Profile => ({ id: 'setup', name: cap(ob.name.trim()) || 'You', color: ob.color, photo: ob.photo, photoOf: ob.photoOf, language: ob.language, region: ob.region, maturity: ob.maturity });
+/**
+ * Who connects services during setup: the profile being made, with the id it will keep. Each profile has its own id,
+ * so its own Jellyfin DeviceId: Jellyfin keeps one token per DeviceId, and a shared one signed the previous profile out.
+ */
+export const provisional = (): Profile => ({ id: ob.id!, name: cap(ob.name.trim()) || 'You', color: ob.color, photo: ob.photo, photoOf: ob.photoOf, language: ob.language, region: ob.region, maturity: ob.maturity });
 function services(o: HTMLElement, n: number) {
   o.innerHTML = `<h1>${t('Connect your services')}</h1><p class="lead">${t('Connect what you use. You can skip this and do it later in Settings.')}</p><div class="stack">${app.providers.map((p) => `<div class="prov" data-p="${p.id}"><span class="plogos">${p.logos.map(plogo).join('')}</span><div class="i"><b>${esc(p.name)}</b><span class="muted">${esc(t(p.blurb))}</span></div><span class="st"></span><button class="f btn" type="button" data-c="${p.id}">${t(p.onOff?.() ? 'Turn on' : 'Connect')}</button></div>`).join('')}</div>${foot()}`;
   const paint = async () => {
@@ -208,7 +250,7 @@ function taste(o: HTMLElement, n: number) {
   up();
   $('#nx', o).onclick = () => {
     ob.picks = [...picks.values()];
-    step(n, ob.addOnly ? 5 : n + 1);
+    step(n, n + 1);
   };
   tasteTitles().then((list) => {
     if (!o.isConnected) return;
@@ -274,7 +316,7 @@ function prefs(o: HTMLElement) {
     }
   })));
   $('#nx', o).onclick = () => {
-    const p: Profile = { id: newId(4), name: cap(ob.name.trim()) || 'You', color: ob.color, photo: ob.photo, photoOf: ob.photoOf, language: ob.language, region: ob.region, maturity: ob.maturity };
+    const p: Profile = { id: ob.id!, name: cap(ob.name.trim()) || 'You', color: ob.color, photo: ob.photo, photoOf: ob.photoOf, language: ob.language, region: ob.region, maturity: ob.maturity };
     finishCb(p, ob.picks);
     if (!ob.name.trim()) toast(t('Profile saved'));
   };

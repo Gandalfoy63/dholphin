@@ -1,9 +1,11 @@
 /* Docs: docs/05 - UI-UX/Design System.md */
 :root{color-scheme:dark;--bg:#0E0E10;--surface:#18181B;--raised:#26262B;--border:#3A3A41;--text:#F4F4F5;--muted:#A9A9B2;--accent:#E5232D;--accent-hover:#F23B44;--gold:#F2C230;--ok:#3CCB7F;--warn:#F5A524;--font:Inter,system-ui,sans-serif;--k:1.35;--out:cubic-bezier(.22,1,.36,1)}
-html,body{height:100%}
+html,body{height:100%;overflow:hidden;-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--text);font:400 15px/1.5 var(--font);overflow:hidden}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;text-align:left}
-#tv{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;background:var(--bg);font-size:24px;line-height:1.35}
+/* Fixed, so the 1920px screen never counts as page content: on a dense screen (a 4K TV's WebView) the browser would
+   zoom out to fit it and report a wider window, and the app would scale itself up past the edges. */
+#tv{position:fixed;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center;overflow:hidden;background:var(--bg);font-size:24px;line-height:1.35}
 .ic{width:32px;height:32px;flex:none;fill:none}.ic.s{width:24px;height:24px}
 h1,h2,h3,p{margin:0}
 .layer{position:absolute;inset:0}
