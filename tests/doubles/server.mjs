@@ -375,6 +375,20 @@ export function createDoubles() {
         // The Jellyfin user u1 (the stand-in's only one) is Seerr's user 7.
         if (a === '/user/jellyfin/u1') return send({ id: 7, displayName: 'tester' });
         if (a === '/_test/requests') return send([...requests].map(([id, r]) => ({ id, ...r })));
+        // GET /request, as a real Seerr 3.5 answered: a download in progress with its sizes and end time, and one
+        // request in each other state. Requests made through the stand-in follow, approved and being searched for.
+        if (a === '/request' && req.method === 'GET') {
+          const user = (id, displayName) => ({ id, displayName });
+          const seeded = [
+            { id: 901, type: 'movie', status: 2, createdAt: '2026-11-08T09:00:00.000Z', updatedAt: '2026-11-08T09:05:00.000Z', requestedBy: user(7, 'tester'), media: { tmdbId: 105, mediaType: 'movie', status: 3, downloadStatus: [{ status: 'downloading', size: 1000, sizeLeft: 600, timeLeft: '01:30:00', estimatedCompletionTime: new Date(Date.now() + 90.5 * 60_000).toISOString(), title: 'Ember.Hollow.1080p' }] } },
+            { id: 902, type: 'movie', status: 1, createdAt: '2026-11-07T20:00:00.000Z', updatedAt: '2026-11-07T20:00:00.000Z', requestedBy: user(3, 'Jules'), media: { tmdbId: 109, mediaType: 'movie', status: 2 } },
+            { id: 903, type: 'tv', status: 2, createdAt: '2026-11-06T20:00:00.000Z', updatedAt: '2026-11-06T20:00:00.000Z', requestedBy: user(3, 'Jules'), seasons: [{ seasonNumber: 2 }, { seasonNumber: 1 }], media: { tmdbId: 114, mediaType: 'tv', status: 3 } },
+            { id: 904, type: 'movie', status: 5, createdAt: '2026-11-01T20:00:00.000Z', updatedAt: '2026-11-02T02:00:00.000Z', requestedBy: user(7, 'tester'), media: { tmdbId: 115, mediaType: 'movie', status: 5 } },
+            { id: 905, type: 'movie', status: 3, createdAt: '2026-10-30T20:00:00.000Z', updatedAt: '2026-10-31T08:00:00.000Z', requestedBy: user(3, 'Jules'), media: { tmdbId: 113, mediaType: 'movie', status: 1 } },
+          ];
+          const made = [...requests].map(([id, r]) => ({ id, type: byId(id)?.tv ? 'tv' : 'movie', status: 2, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), requestedBy: user(r.userId ?? 1, r.userId === 7 ? 'tester' : 'admin'), media: { tmdbId: id, mediaType: byId(id)?.tv ? 'tv' : 'movie', status: 3 } }));
+          return send({ pageInfo: { pages: 1, pageSize: 100, results: seeded.length + made.length, page: 1 }, results: [...made, ...seeded] });
+        }
         const m = a.match(/^\/(movie|tv)\/(\d+)$/);
         if (m) return send({ id: Number(m[2]), mediaInfo: requests.has(Number(m[2])) ? { status: requests.get(Number(m[2])).status, seasons: requests.get(Number(m[2])).seasons.map((seasonNumber) => ({ seasonNumber, status: 3 })) } : undefined });
         send({ message: 'not here' }, 404);

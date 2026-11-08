@@ -19,6 +19,7 @@ import { startPlay } from './play';
 import { loadPrefs, savePrefs } from './player';
 import { getLocale, LANGUAGES, setLocale, t, t as tr } from './i18n';
 import { avatar, showLines } from './profiles';
+import { pageRequests } from './requests';
 import { setReturnContext } from './returning';
 import { artHtml, bindCards, cardHtml, heroHtml, loadRows, rowSkeleton, type Item } from './rows';
 import { bindKeyboard, keyboardHtml } from './textentry';
@@ -368,7 +369,6 @@ async function pageHistory(ct: HTMLElement, kind: 'all' | 'movie' | 'series' = '
   });
 }
 
-const pageRequests = (ct: HTMLElement) => pageCategory(ct, 'requested');
 
 async function pageSettings(ct: HTMLElement) {
   const rows = await Promise.all(app.providers.map(async (p) => ({ p, s: await p.status(app.profile) })));

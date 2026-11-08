@@ -412,6 +412,28 @@ await until(p, () => document.querySelector('.grid .card') );
 await shot(p, '15-you-requested');
 check('You Requested lists it, with the state from Seerr', (await p.locator('.grid .card').evaluateAll((l) => l.map((c) => c.getAttribute('aria-label')))).includes('Kestrel') && (await p.locator('.grid .state').innerText()) === 'Downloading');
 
+// The Requests page: every request from Seerr, grouped by where it stands, a download with its progress and time left.
+await p.evaluate(() => document.querySelector('[data-go="requests"]').click());
+await until(p, () => document.querySelector('.rqpg [data-rq]'));
+await p.waitForTimeout(600);
+await shot(p, '15b-requests');
+const rq = await p.evaluate(() => ({
+  groups: [...document.querySelectorAll('.rqpg .hgrp')].map((h) => h.firstChild.textContent.trim()),
+  dl: document.querySelector('.rqpg [data-rq="901"]')?.innerText.replace(/\s+/g, ' ') ?? '',
+  tags: Object.fromEntries([...document.querySelectorAll('.rqpg [data-rq]')].map((b) => [b.dataset.rq, b.querySelector('.tag')?.textContent ?? 'bar'])),
+  series: document.querySelector('.rqpg [data-rq="903"]')?.innerText ?? '',
+  status: document.querySelector('#rqs').textContent,
+}));
+check('Requests are grouped by where they stand: downloading first, then waiting, available, and what won\'t come', rq.groups.join() === 'Downloading,Waiting,Available,Not coming', JSON.stringify(rq.groups));
+check('A download shows how far it is, the time left and when it will be ready', /40%/.test(rq.dl) && /1 h 3\d min left/.test(rq.dl) && /ready at \d\d:\d\d/.test(rq.dl) && /asked by tester/.test(rq.dl), rq.dl);
+check('Each other request says its state plainly', rq.tags['902'] === 'Waiting for approval' && rq.tags['903'] === 'Looking for a download' && rq.tags['904'] === 'Available' && rq.tags['905'] === 'Declined', JSON.stringify(rq.tags));
+check('A series request names its seasons, and the page says when it was updated', /Seasons 1 to 2/.test(rq.series) && /asked by Jules/.test(rq.series) && /requests · updated at/.test(rq.status), rq.series + ' | ' + rq.status);
+check('Kestrel, just requested, is there, being looked for', (await p.locator('.rqpg [data-rq="110"] .tag').textContent()) === 'Looking for a download');
+await p.locator('[data-rw="mine"]').click();
+const mineIds = await p.locator('.rqpg [data-rq]').evaluateAll((l) => l.map((b) => b.dataset.rq));
+check('Mine shows only this profile\'s requests (its Seerr user)', mineIds.length > 0 && mineIds.every((id) => ['901', '904', '110'].includes(id)) && !mineIds.includes('902'), mineIds.join());
+await p.locator('[data-rw="all"]').click();
+
 // Choosing seasons
 await openBySearch(p, 'Iron Meridian');
 await until(p, () => document.querySelector('.dlayer #dq'));

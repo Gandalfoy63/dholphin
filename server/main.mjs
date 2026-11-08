@@ -66,6 +66,11 @@ export function isPrivate(url) {
 }
 /** Whether this service goes through the relay: always, never, or (auto) when its address is private. */
 const relayed = (url) => !!url && (state.settings.data.relay === 'on' || (state.settings.data.relay !== 'off' && isPrivate(url)));
+/**
+ * Seerr goes through the server unless relaying is turned off: it sends no CORS headers, so a browser or a TV's
+ * WebView can't call it from the app at any address, and its key (an admin's) then stays on the server.
+ */
+const seerrRelayed = (url) => !!url && state.settings.data.relay !== 'off';
 const relayBase = (req, device, service) => `${originOf(req)}/api/r/${device.relay}/${service}`;
 
 async function relay(req, res, service, rest) {
@@ -95,9 +100,9 @@ function storeGet(key, req, device) {
   const s = state.settings.data;
   if (key === 'keys') return Object.fromEntries(['tmdb', 'omdb', 'trakt', 'google'].map((k) => [k, s.keys[k] ? 'server' : '']));
   if (key === 'prov:jellyfin:server') return s.jellyfin ? (relayed(s.jellyfin) ? relayBase(req, device, 'jellyfin') : s.jellyfin) : undefined;
-  if (key === 'prov:jellyfin:seerrUrl') return s.seerr ? (relayed(s.seerr) ? relayBase(req, device, 'seerr') : s.seerr) : undefined;
+  if (key === 'prov:jellyfin:seerrUrl') return s.seerr ? (seerrRelayed(s.seerr) ? relayBase(req, device, 'seerr') : s.seerr) : undefined;
   // Through the relay, Seerr's key is added by the server: the app holds a placeholder.
-  if (key === 'prov:jellyfin:seerrKey') return s.seerrKey ? (relayed(s.seerr) ? 'relay' : s.seerrKey) : undefined;
+  if (key === 'prov:jellyfin:seerrKey') return s.seerrKey ? (seerrRelayed(s.seerr) ? 'relay' : s.seerrKey) : undefined;
   return state.store.data[key];
 }
 const SYNTHETIC = ['keys', 'prov:jellyfin:server', 'prov:jellyfin:seerrUrl', 'prov:jellyfin:seerrKey'];
@@ -142,7 +147,7 @@ function adminState() {
   return {
     version: VERSION, keys: Object.fromEntries(['tmdb', 'omdb', 'trakt', 'google'].map((k) => [k, !!s.keys[k]])),
     jellyfin: s.jellyfin, seerr: s.seerr, seerrKey: !!s.seerrKey, relay: s.relay, webApp: s.webApp,
-    relayNow: { jellyfin: relayed(s.jellyfin), seerr: relayed(s.seerr) },
+    relayNow: { jellyfin: relayed(s.jellyfin), seerr: seerrRelayed(s.seerr) },
     profiles: profiles.map((p) => ({ id: p.id, name: p.name, color: p.color, kids: !!p.kids, jellyfin: !!state.store.data[`prov:jellyfin:link:${p.id}`] })),
     devices: state.devices.data.map((d) => ({ id: d.id, name: d.name, kind: d.kind, createdAt: d.createdAt, lastSeen: d.lastSeen })),
   };

@@ -1,5 +1,6 @@
 // Docs: docs/06 - API/Jellyfin and Seerr Provider.md
 // Purpose: your Jellyfin server, with Seerr for asking for what it doesn't have.
+import { toEntry, type SeerrRequest } from './requests';
 import type { Availability, Chapter, Episode, InternalSession, PlaySession, PlayTarget, Profile, Provider, ProviderContext, Season, Segment, StreamChoice, StreamTrack, Title, Trickplay, VideoSource } from '@/sdk/types';
 import { key as nameKey } from '@/core/dubbing';
 import { newId } from '@/core/id';
@@ -329,6 +330,12 @@ export function jellyfin(ctx: ProviderContext): Provider {
     },
     async canRequest() {
       return !!(await ctx.get('seerrUrl'));
+    },
+    async requestList(p) {
+      // Docs: Seerr API/Request (GET /request). With the household's key, Seerr gives everyone's requests.
+      const [me, r] = await Promise.all([seerrUser(p).catch(() => null), seerr('/request?take=100&skip=0&sort=modified&filter=all') as Promise<{ results?: SeerrRequest[] } | null>]);
+      if (!r) throw new Error('Connect Seerr in Settings');
+      return (r.results ?? []).map((q) => toEntry(q, me)).filter((e): e is NonNullable<typeof e> => !!e);
     },
   };
   return provider;

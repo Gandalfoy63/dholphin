@@ -105,6 +105,25 @@ export interface Provider {
   seasonStates?(title: Title): Promise<Map<number, string>>;
   requestState?(title: Title): Promise<string | null>;
   canRequest?(): Promise<boolean>;
+  /** Every request of the household, newest change first, each with one clear stage and its download, if any. */
+  requestList?(profile: Profile): Promise<RequestEntry[]>;
+}
+
+/** Where a request stands, said plainly: waiting for approval, looking for a download, downloading, and so on. */
+export type RequestStage = 'pending' | 'approved' | 'searching' | 'downloading' | 'partly' | 'available' | 'declined' | 'failed' | 'deleted';
+export interface RequestEntry {
+  id: string;
+  tmdbId: number;
+  kind: 'movie' | 'tv';
+  stage: RequestStage;
+  requestedBy?: string;
+  /** Asked by this profile's own account. */
+  mine: boolean;
+  requestedAt: string | null;
+  changedAt: string | null;
+  seasons?: number[];
+  /** While downloading: done from 0 to 1, when it should end (ISO), how many files. */
+  download?: { progress: number; eta: string | null; files: number; state: string | null };
 }
 
 /** Another app on the device that can open a service's address, as the Netflix app on Android TV. */

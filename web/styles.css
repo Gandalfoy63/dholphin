@@ -571,6 +571,11 @@ h1,h2,h3,p{margin:0}
 .hprog .muted{font-size:18px;min-width:52px;text-align:right}
 .hrow .tag{margin-left:auto}
 .tag.ok{background:var(--ok);color:#0E0E10}
+.tag.warn{background:var(--warn);color:#0E0E10}.tag.err{background:var(--raised);color:var(--text);box-shadow:inset 0 0 0 2px var(--accent)}
+/* Requests: the download's bar, its percentage and the time left. */
+.rqp .ibar{width:240px;height:8px;border-radius:4px}.rqp .ibar i{background:var(--warn)}
+.rqt{display:grid;gap:2px;min-width:220px}.rqt b{font-size:22px;font-variant-numeric:tabular-nums}.rqt .muted{font-size:18px}
+.rqpg .li .art{width:192px;height:108px;border-radius:6px;object-fit:cover;flex:none}
 #ds[aria-pressed="true"]{color:var(--ok)}
 #ds[aria-pressed="true"] .ic{fill:none}
 .onb .muted .btn{margin-left:12px;vertical-align:middle}

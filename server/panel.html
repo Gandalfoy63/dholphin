@@ -88,7 +88,7 @@ function draw(st) {
   // Jellyfin, Seerr and the relay.
   const jf = el('input', { value: st.jellyfin, placeholder: 'http://192.168.1.20:8096' }), se = el('input', { value: st.seerr, placeholder: 'http://192.168.1.20:5055' });
   const sk = el('input', { type: 'password', autocomplete: 'off', placeholder: st.seerrKey ? 'Set. Leave empty to keep it' : 'Missing' });
-  const relay = el('select', {}, ...[['auto', 'Automatic: relay a local address, reach a public one directly'], ['on', 'Always relay'], ['off', 'Never relay']].map(([v, t]) => el('option', { value: v, selected: st.relay === v }, t)));
+  const relay = el('select', {}, ...[['auto', 'Automatic: relay a local Jellyfin, reach a public one directly; Seerr always through this server'], ['on', 'Always relay'], ['off', 'Never relay']].map(([v, t]) => el('option', { value: v, selected: st.relay === v }, t)));
   const relayNow = (name, on, addr) => addr ? el('span', { class: `tag ${on ? 'warn' : 'ok'}` }, `${name}: ${on ? 'through this server' : 'direct'}`) : null;
   // Profiles, each with its own Jellyfin account.
   const profiles = st.profiles.map((p) => {
