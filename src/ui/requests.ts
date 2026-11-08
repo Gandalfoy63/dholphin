@@ -43,14 +43,25 @@ const seasonsText = (s?: number[]) => {
   return s.length === 1 ? t('Season {n}', { n: s[0]! }) : run ? t('Seasons {a} to {b}', { a: s[0]!, b: s.at(-1)! }) : t('Seasons {list}', { list: s.join(', ') });
 };
 
-function stateHtml(e: RequestEntry) {
+/**
+ * A request as a poster box: the band at its bottom holds the name and where it stands. A download shows its
+ * percentage and time left there, and its bar along the box's bottom edge.
+ */
+function boxHtml(e: RequestEntry, tl: Title, when: string) {
+  const who = [e.requestedBy ?? '', when].filter(Boolean).join(' · ');
+  let state: string, bar = '';
   if (e.stage === 'downloading' && e.download) {
     const pct = Math.round(e.download.progress * 100), left = timeLeft(e.download.eta);
     const at = e.download.eta ? new Intl.DateTimeFormat(getLocale(), { hour: '2-digit', minute: '2-digit' }).format(Date.parse(e.download.eta)) : '';
-    return `<span class="hprog rqp"><span class="ibar"><i style="transform:scaleX(${e.download.progress})"></i></span><span class="rqt"><b>${pct}%</b><span class="muted">${esc((left ? [t('{time} left', { time: left }), at ? t('ready at {time}', { time: at }) : ''] : [e.download.eta ? t('Almost done') : '']).filter(Boolean).join(' · '))}</span></span></span>`;
+    state = `<span class="rqd"><b>${pct}%</b>${esc(left ? t('{time} left', { time: left }) : e.download.eta ? t('Almost done') : '')}</span>${left && at ? `<span class="rqw">${esc(t('ready at {time}', { time: at }))}</span>` : ''}`;
+    bar = `<span class="prog rqbar"><i style="transform:scaleX(${e.download.progress})"></i></span>`;
+  } else {
+    const [label, tone] = STAGE[e.stage];
+    state = `<span class="tag ${tone}">${esc(t(label))}</span>`;
   }
-  const [label, tone] = STAGE[e.stage];
-  return `<span class="tag ${tone}">${esc(t(label))}</span>`;
+  const seasons = seasonsText(e.seasons);
+  const label = [tl.name, t(STAGE[e.stage][0]), seasons, e.requestedBy ? t('asked by {name}', { name: e.requestedBy }) : ''].filter(Boolean).join(', ');
+  return `<button class="f card poster rqc" type="button" data-rq="${esc(e.id)}" aria-label="${esc(label)}">${artHtml(tl, 'w300', 'poster')}${seasons ? `<span class="state">${esc(seasons)}</span>` : ''}<span class="rqb"><b class="rqn">${esc(tl.name)}</b>${state}${who ? `<span class="rqw">${esc(who)}</span>` : ''}</span>${bar}</button>`;
 }
 
 /**
@@ -63,7 +74,7 @@ export async function pageRequests(ct: HTMLElement) {
     ct.innerHTML = `<div class="pg"><h1>${t('Requests')}</h1><div class="empty"><b style="color:var(--text)">${t('No request service')}</b>${t('Connect Jellyfin with Seerr in Settings to ask for what your services don\'t have.')}</div></div>`;
     return;
   }
-  ct.innerHTML = `<div class="pg rqpg"><div class="hhead"><h1>${t('Requests')}</h1><span class="muted" id="rqs">${ico('loader-circle', 's spin')}${t('Asking Seerr')}</span></div><div class="lst">${'<div class="li skc" style="height:110px"></div>'.repeat(4)}</div></div>`;
+  ct.innerHTML = `<div class="pg rqpg"><div class="hhead"><h1>${t('Requests')}</h1><span class="muted" id="rqs">${ico('loader-circle', 's spin')}${t('Asking Seerr')}</span></div><div class="grid rqgrid">${'<div class="skc tall"></div>'.repeat(6)}</div></div>`;
   const titles = new Map<string, Title | null>();
   let entries: RequestEntry[] = [], failed = '', first = true, count = SHOWN;
   const load = async () => {
@@ -86,16 +97,14 @@ export async function pageRequests(ct: HTMLElement) {
     const groups = GROUPS.map((g) => {
       const list = shown.filter((e) => g.stages.includes(e.stage));
       if (!list.length || n >= count) return '';
-      const rows = list.slice(0, Math.max(0, count - n)).map((e) => {
+      const boxes = list.slice(0, Math.max(0, count - n)).map((e) => {
         n++;
-        const tl = titles.get(`${e.kind}:${e.tmdbId}`)!;
-        const sub = [t(e.kind === 'tv' ? 'Series' : 'Movie'), seasonsText(e.seasons), e.requestedBy ? t('asked by {name}', { name: e.requestedBy }) : '', day(e.requestedAt)].filter(Boolean).join(' · ');
-        return `<div class="hrow"><button class="f li" type="button" data-rq="${esc(e.id)}" aria-label="${esc(`${tl.name}, ${t(STAGE[e.stage][0])}`)}">${artHtml(tl, 'w300')}<span class="g"><b>${esc(tl.name)}</b><span>${esc(sub)}</span></span>${stateHtml(e)}</button></div>`;
+        return boxHtml(e, titles.get(`${e.kind}:${e.tmdbId}`)!, day(e.requestedAt));
       }).join('');
-      return `<h2 class="hgrp">${esc(t(g.label))} <span class="muted">${list.length}</span></h2>${rows}`;
+      return `<h2 class="hgrp">${esc(t(g.label))} <span class="muted">${list.length}</span></h2><div class="grid rqgrid">${boxes}</div>`;
     }).join('');
     const mine = entries.filter((e) => e.mine).length;
-    ct.innerHTML = `<div class="pg rqpg"><div class="hhead"><h1>${t('Requests')}</h1><span class="muted" id="rqs">${esc(failed ? t('Seerr could not be reached: {why}', { why: t(failed) }) : t('{n} requests · updated at {time}', { n: entries.length, time }))}</span></div><div class="btns" role="group" aria-label="${t('Whose requests')}"><button class="f chip" type="button" data-rw="all" aria-pressed="${who === 'all'}">${t('Everyone')}</button><button class="f chip" type="button" data-rw="mine" aria-pressed="${who === 'mine'}" ${mine ? '' : 'disabled'}>${t('Mine')}</button></div>${groups ? `<div class="lst">${groups}</div>${shown.length > count ? `<div><button class="f btn" id="rqmore" type="button">${t('Show more')}</button></div>` : ''}` : `<div class="empty"><b style="color:var(--text)">${t(failed ? 'Requests could not load' : 'No requests yet')}</b>${t(failed ? 'Check Seerr in the server panel or in Settings.' : "Open a title your services don't have, and choose Request.")}</div>`}</div>`;
+    ct.innerHTML = `<div class="pg rqpg"><div class="hhead"><h1>${t('Requests')}</h1><span class="muted" id="rqs">${esc(failed ? t('Seerr could not be reached: {why}', { why: t(failed) }) : t('{n} requests · updated at {time}', { n: entries.length, time }))}</span></div><div class="btns" role="group" aria-label="${t('Whose requests')}"><button class="f chip" type="button" data-rw="all" aria-pressed="${who === 'all'}">${t('Everyone')}</button><button class="f chip" type="button" data-rw="mine" aria-pressed="${who === 'mine'}" ${mine ? '' : 'disabled'}>${t('Mine')}</button></div>${groups ? `<div class="rqgroups">${groups}</div>${shown.length > count ? `<div><button class="f btn" id="rqmore" type="button">${t('Show more')}</button></div>` : ''}` : `<div class="empty"><b style="color:var(--text)">${t(failed ? 'Requests could not load' : 'No requests yet')}</b>${t(failed ? 'Check Seerr in the server panel or in Settings.' : "Open a title your services don't have, and choose Request.")}</div>`}</div>`;
     $$<HTMLButtonElement>('[data-rq]', ct).forEach((b) => (b.onclick = () => {
       const e = entries.find((x) => x.id === b.dataset.rq)!;
       void openDetails(titles.get(`${e.kind}:${e.tmdbId}`)!, b);
@@ -113,7 +122,7 @@ export async function pageRequests(ct: HTMLElement) {
     };
     if (first) {
       first = false;
-      cascade($$('.hrow', ct));
+      cascade($$('.rqc', ct));
       go($('[data-rq]', ct) ?? focusables(ct)[0]);
     } else if (keep) go($(`[data-rq="${CSS.escape(keep)}"], [data-rw="${CSS.escape(keep)}"]`, ct) ?? focusables(ct)[0]);
     return true;

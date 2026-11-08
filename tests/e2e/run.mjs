@@ -422,12 +422,15 @@ const rq = await p.evaluate(() => ({
   dl: document.querySelector('.rqpg [data-rq="901"]')?.innerText.replace(/\s+/g, ' ') ?? '',
   tags: Object.fromEntries([...document.querySelectorAll('.rqpg [data-rq]')].map((b) => [b.dataset.rq, b.querySelector('.tag')?.textContent ?? 'bar'])),
   series: document.querySelector('.rqpg [data-rq="903"]')?.innerText ?? '',
+  seriesLabel: document.querySelector('.rqpg [data-rq="903"]')?.getAttribute('aria-label') ?? '',
+  box: [...document.querySelectorAll('.rqpg [data-rq]')].every((b) => { const r = b.getBoundingClientRect(); return b.classList.contains('poster') && r.height > r.width * 1.3; }),
+  bar: (() => { const b = document.querySelector('.rqpg [data-rq="901"]'), bar = b?.querySelector('.rqbar'); if (!bar) return {}; const br = b.getBoundingClientRect(), r = bar.getBoundingClientRect(); return { atBottom: Math.abs(br.bottom - r.bottom) < 3, scale: new DOMMatrix(getComputedStyle(bar.querySelector('i')).transform).a }; })(),
   status: document.querySelector('#rqs').textContent,
 }));
 check('Requests are grouped by where they stand: downloading first, then waiting, available, and what won\'t come', rq.groups.join() === 'Downloading,Waiting,Available,Not coming', JSON.stringify(rq.groups));
-check('A download shows how far it is, the time left and when it will be ready', /40%/.test(rq.dl) && /1 h 3\d min left/.test(rq.dl) && /ready at \d\d:\d\d/.test(rq.dl) && /asked by tester/.test(rq.dl), rq.dl);
+check('A download shows how far it is, the time left and when it will be ready, with its bar along the bottom of its box', /40%/.test(rq.dl) && /1 h 3\d min left/.test(rq.dl) && /ready at \d\d:\d\d/.test(rq.dl) && /tester/.test(rq.dl) && rq.bar.atBottom && Math.abs(rq.bar.scale - 0.4) < 0.01, rq.dl + JSON.stringify(rq.bar));
 check('Each other request says its state plainly', rq.tags['902'] === 'Waiting for approval' && rq.tags['903'] === 'Looking for a download' && rq.tags['904'] === 'Available' && rq.tags['905'] === 'Declined', JSON.stringify(rq.tags));
-check('A series request names its seasons, and the page says when it was updated', /Seasons 1 to 2/.test(rq.series) && /asked by Jules/.test(rq.series) && /requests · updated at/.test(rq.status), rq.series + ' | ' + rq.status);
+check('Requests are poster boxes; a series names its seasons and who asked, and the page says when it was updated', rq.box && /Seasons 1 to 2/.test(rq.series) && /Jules/.test(rq.series) && /asked by Jules/.test(rq.seriesLabel) && /requests · updated at/.test(rq.status), rq.series + ' | ' + rq.status);
 check('Kestrel, just requested, is there, being looked for', (await p.locator('.rqpg [data-rq="110"] .tag').textContent()) === 'Looking for a download');
 await p.locator('[data-rw="mine"]').click();
 const mineIds = await p.locator('.rqpg [data-rq]').evaluateAll((l) => l.map((b) => b.dataset.rq));
