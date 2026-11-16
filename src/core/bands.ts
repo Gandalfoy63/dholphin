@@ -192,7 +192,7 @@ export function bandOrder(groups: Record<Group, Band[]>): Band[] {
   return out;
 }
 
-const GENRE_IDS: Record<string, string> = { Action: 'action', Adventure: 'adventure', Animation: 'animation', Comedy: 'comedy', Crime: 'crime', Documentary: 'documentary', Drama: 'drama', Family: 'family', Fantasy: 'fantasy', Horror: 'horror', Mystery: 'mystery', Romance: 'romance', 'Science Fiction': 'scifi', Thriller: 'thriller', War: 'war' };
+export const GENRE_IDS: Record<string, string> = { Action: 'action', Adventure: 'adventure', Animation: 'animation', Comedy: 'comedy', Crime: 'crime', Documentary: 'documentary', Drama: 'drama', Family: 'family', Fantasy: 'fantasy', Horror: 'horror', Mystery: 'mystery', Romance: 'romance', 'Science Fiction': 'scifi', Thriller: 'thriller', War: 'war' };
 
 /** How many rows one batch adds, and how many rounds the feed goes before it stops. */
 const BATCH = 12, ROUNDS = 20;

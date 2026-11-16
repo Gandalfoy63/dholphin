@@ -9,7 +9,7 @@ import { loadCore } from './core/wasm';
 import type { Profile, Title } from './sdk/types';
 import { app } from './ui/app';
 import { A, $, fitTv, loadIcons, logoMark, logoStart, TV, toast, FADE_OUT } from './ui/dom';
-import { installKeys, nav } from './ui/focus';
+import { installHistory, installKeys, nav } from './ui/focus';
 import { LANGUAGES, setLocale, t } from './ui/i18n';
 import { openDetails } from './ui/details';
 import { startOnboarding, type ObState } from './ui/onboarding';
@@ -71,6 +71,7 @@ async function boot() {
   fitTv();
   await loadIcons();
   installKeys();
+  if (app.host.id === 'browser') installHistory();
   try {
     await loadCore();
     await app.init();

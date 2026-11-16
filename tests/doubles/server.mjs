@@ -81,9 +81,16 @@ function discover(tv, q) {
     if (q.get(p)) l = l.filter((t) => cmp(t.date, q.get(p)));
   }
   if (!q.get('primary_release_date.gte') && !q.get('first_air_date.gte')) l = l.filter((t) => t.date <= day(0));
-  if (q.get('sort_by')?.startsWith('vote')) l = [...l].sort((a, b) => b.imdb - a.imdb);
+  if (q.get('vote_average.gte')) l = l.filter((t) => t.imdb >= Number(q.get('vote_average.gte')));
+  // TMDB's orders, as the Library asks for them: by name, by grade, by date, either way.
+  const sort = q.get('sort_by') ?? '', down = sort.endsWith('.desc');
+  const byName = (a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true, ignorePunctuation: true });
+  if (/^(title|name)\./.test(sort)) l = [...l].sort((a, b) => (down ? byName(b, a) : byName(a, b)));
+  else if (sort.startsWith('vote_average')) l = [...l].sort((a, b) => (sort === 'vote_average.asc' ? a.imdb - b.imdb : b.imdb - a.imdb));
+  else if (sort.startsWith('vote')) l = [...l].sort((a, b) => b.imdb - a.imdb);
+  else if (/_date\./.test(sort)) l = [...l].sort((a, b) => (down ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)));
   const page = Number(q.get('page') ?? 1);
-  return { page, results: l.slice((page - 1) * 20, page * 20).map(tmdbItem), total_results: l.length };
+  return { page, results: l.slice((page - 1) * 20, page * 20).map(tmdbItem), total_results: l.length, total_pages: Math.max(1, Math.ceil(l.length / 20)) };
 }
 
 function details(t) {

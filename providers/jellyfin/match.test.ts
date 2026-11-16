@@ -28,3 +28,25 @@ describe('jellyfin item for a title', () => {
     expect(findItem(ix, t('tmdb:movie:9', 'Frieren', { year: 2023 }))).toBeUndefined();
   });
 });
+
+describe('jellyfin search and library', () => {
+  it('matches a typed word to a word of a name, typos allowed from four letters', async () => {
+    const { wordNear, nameWords } = await import('./index');
+    expect(nameWords('Le Voyage de Chihiro!')).toEqual(['le', 'voyage', 'de', 'chihiro']);
+    expect(wordNear('voy', 'voyage')).toBe(true);
+    expect(wordNear('tied', 'tide')).toBe(true);
+    expect(wordNear('chihrio', 'chihiro')).toBe(true);
+    expect(wordNear('dad', 'bad')).toBe(false);
+    expect(wordNear('xyzw', 'dune')).toBe(false);
+  });
+  it('keeps home videos for the Library, never as a match for a film', () => {
+    const withVideo = buildIndex([
+      { Id: 'v', Name: 'Dune', Type: 'Video', ProductionYear: 2021 },
+      { Id: 'm', Name: 'Heat', Type: 'Movie', ProductionYear: 1995 },
+    ] as never);
+    expect(withVideo.all.map((i) => i.Id)).toEqual(['v', 'm']);
+    expect(findItem(withVideo, t('tmdb:movie:438631', 'Dune', { year: 2021 }))).toBeUndefined();
+    expect(findItem(withVideo, t('tmdb:movie:949', 'Heat', { year: 1995 }))?.Id).toBe('m');
+    expect(findItem(withVideo, t('jellyfin:v', 'Dune'))?.Id).toBe('v');
+  });
+});

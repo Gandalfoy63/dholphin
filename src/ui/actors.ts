@@ -5,7 +5,7 @@ import { app } from './app';
 import { A, $, $$, cascade, esc, ico, leave, TV } from './dom';
 import { go } from './focus';
 import { t } from './i18n';
-import { bindKeyboard, keyboardHtml } from './textentry';
+import { bindLine, lineHtml, lineStart } from './textentry';
 
 /**
  * Opens the actor picker over the page. Resolves with the actor chosen, `null` for no photo (colour and initial),
@@ -13,7 +13,7 @@ import { bindKeyboard, keyboardHtml } from './textentry';
  */
 export function pickActor(opener: HTMLElement, current?: string): Promise<Actor | null | undefined> {
   return new Promise((done) => {
-    TV().insertAdjacentHTML('beforeend', `<div class="modal acm" role="dialog" aria-label="${t('Choose an actor')}"><div class="acm-in"><header><h2>${t('Choose an actor')}</h2><span class="muted">${t('Most popular on TMDB, or search by name')}</span></header><div class="acm-body"><div class="stack"><div class="nm" aria-live="polite"></div>${keyboardHtml(false)}</div><div class="acm-clip"><div class="acm-grid" role="list"><span class="btn" aria-busy="true">${t('Loading')}</span></div></div></div></div></div>`);
+    TV().insertAdjacentHTML('beforeend', `<div class="modal acm" role="dialog" aria-label="${t('Choose an actor')}"><div class="acm-in"><header><h2>${t('Choose an actor')}</h2><span class="muted">${t('Most popular on TMDB, or search by name')}</span></header><div class="acm-body"><div class="stack">${lineHtml({ label: t('Search by name'), max: 30, type: 'search' })}</div><div class="acm-clip"><div class="acm-grid" role="list"><span class="btn" aria-busy="true">${t('Loading')}</span></div></div></div></div></div>`);
     const m = $('.acm', TV()), grid = $('.acm-grid', m);
     A($('.acm-in', m), [{ opacity: 0, transform: 'translateY(32px)' }, { opacity: 1, transform: 'none' }], { duration: 340 });
     A(m, [{ opacity: 0 }, { opacity: 1 }], { duration: 240 });
@@ -49,15 +49,14 @@ export function pickActor(opener: HTMLElement, current?: string): Promise<Actor 
       cascade($$('.ac', grid), { from: 'pop', step: 40, max: 12 });
       if (first) {
         first = false;
-        go((current ? $('.ac[aria-pressed="true"]', grid) : null) ?? $('.ac:not(.none)', grid) ?? $('.ac', grid) ?? $('.kb .key', m));
+        go((current ? $('.ac[aria-pressed="true"]', grid) : null) ?? $('.ac:not(.none)', grid) ?? $('.ac', grid) ?? lineStart(m));
       }
     };
-    bindKeyboard(m, (k) => {
-      q = k === 'del' ? q.slice(0, -1) : (q + k).slice(0, 30);
-      $('.nm', m).textContent = q;
+    bindLine(m, { max: 30, onValue: (v) => {
+      q = v;
       clearTimeout(timer);
       timer = window.setTimeout(() => void draw(), 300);
-    });
+    } });
     void draw();
   });
 }

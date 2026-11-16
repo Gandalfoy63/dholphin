@@ -42,6 +42,8 @@ a{color:var(--text)}
 <script>
 // Everything is drawn with textContent and attributes, never as HTML from the server's data.
 const app = document.getElementById('app');
+// The server may sit under a path behind a proxy (/dholphin/...): every address is relative to where this page is.
+const BASE = location.pathname.replace(/panel\/?$/, '').replace(/[^/]*$/, '');
 const el = (tag, attrs = {}, ...kids) => {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else if (v !== false && v != null) e.setAttribute(k, v === true ? '' : v);
@@ -49,7 +51,7 @@ const el = (tag, attrs = {}, ...kids) => {
   return e;
 };
 const api = async (path, body, method = body ? 'POST' : 'GET') => {
-  const r = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(BASE + path.replace(/^\//, ''), { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(j.message ?? `The server answered ${r.status}`);
   return j;
@@ -107,7 +109,7 @@ function draw(st) {
   const oldPw = el('input', { type: 'password', autocomplete: 'current-password' }), newPw = el('input', { type: 'password', minlength: 8, autocomplete: 'new-password' });
 
   app.replaceChildren(
-    el('header', {}, el('h1', {}, 'Dholphin panel'), el('span', { class: 'muted' }, `Server ${st.version}`), st.webApp ? el('a', { href: '/' }, 'Open the web app') : null),
+    el('header', {}, el('h1', {}, 'Dholphin panel'), el('span', { class: 'muted' }, `Server ${st.version}`), st.webApp ? el('a', { href: BASE }, 'Open the web app') : null),
     el('section', {}, el('h2', {}, 'Web app'), el('p', {}, 'The app in a browser, on a computer or a phone, at this address. Off, only linked TVs use the server.'),
       el('div', { class: 'row' }, el('span', { class: `tag ${st.webApp ? 'ok' : ''}` }, st.webApp ? 'On' : 'Off'), el('button', { onclick: () => save({ webApp: !st.webApp }, st.webApp ? 'Web app turned off' : 'Web app turned on') }, st.webApp ? 'Turn off' : 'Turn on'))),
     el('section', {}, el('h2', {}, 'Film data keys'), el('p', {}, 'Kept on the server: apps and browsers never see them. The server keeps TMDB’s answers and pictures, so pages load quickly everywhere.'),
@@ -120,7 +122,7 @@ function draw(st) {
     el('section', {}, el('h2', {}, 'Profiles'), ...profiles,
       el('div', { class: 'row' }, newName, el('button', { disabled: st.profiles.length >= 8, onclick: async () => { try { draw(await api('/api/admin/profiles', { action: 'add', name: newName.value })); toast('Profile added'); } catch (x) { toast(x.message); } } }, 'Add a profile'))),
     el('section', {}, el('h2', {}, 'Devices'), el('p', {}, 'Every browser and TV signed in to this server. Signing one out ends its access at once.'), ...devices,
-      el('div', { class: 'row' }, el('button', { onclick: async () => { const r = await api('/api/admin/pair', {}); codeBox.hidden = false; codeBox.replaceChildren(el('p', {}, 'On the TV: Settings, Link to a Dholphin server. Enter this address and code; it works once, for ten minutes.'), el('b', {}, r.origin), el('span', { class: 'code' }, r.code)); } }, 'Link a TV')), codeBox),
+      el('div', { class: 'row' }, el('button', { onclick: async () => { const r = await api('/api/admin/pair', {}); codeBox.hidden = false; codeBox.replaceChildren(el('p', {}, 'On the TV: Settings, Link to a Dholphin server. Enter this address and code; it works once, for ten minutes.'), el('b', {}, location.origin + BASE.replace(/\/$/, '')), el('span', { class: 'code' }, r.code)); } }, 'Link a TV')), codeBox),
     el('section', {}, el('h2', {}, 'Household password'), el('div', { class: 'grid' }, el('label', {}, 'Current password', oldPw), el('label', {}, 'New password, 8 characters or more', newPw)),
       el('div', { class: 'row' }, el('button', { onclick: async () => { try { await api('/api/admin/password', { old: oldPw.value, password: newPw.value }); toast('Password changed'); oldPw.value = newPw.value = ''; } catch (x) { toast(x.message); } } }, 'Change the password'))),
     el('section', {}, el('h2', {}, 'Cache'), el('p', {}, 'Film data and pictures kept on the server. Emptying it is safe: it fills again as people browse.'),

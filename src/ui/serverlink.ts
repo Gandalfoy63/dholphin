@@ -11,12 +11,13 @@ import { bindFields, fieldsHtml, keyboardHtml } from './textentry';
 /** Kept on this device only (not the household's): its link to a server. */
 const LINK_KEY = 'serverLink';
 
-/** The address as typed: a scheme added when missing, no trailing slash. */
+/** The address as typed: a scheme added when missing, a path kept (a server under a proxy's path), no trailing slash. */
 export function normalizeOrigin(raw: string): string | null {
   const s = raw.trim().replace(/\/+$/, '');
   if (!s) return null;
   try {
-    return new URL(/^https?:\/\//i.test(s) ? s : `http://${s}`).origin;
+    const u = new URL(/^https?:\/\//i.test(s) ? s : `http://${s}`);
+    return (u.origin + u.pathname).replace(/\/+$/, '');
   } catch {
     return null;
   }
@@ -112,9 +113,9 @@ export function setUpWhere(setUpHere: () => void) {
   const showCode = async () => {
     const box = $('#tvcode');
     if (!box) return;
-    const r = (await fetch('/api/admin/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((x) => (x.ok ? x.json() : null)).catch(() => null)) as { code?: string; origin?: string } | null;
+    const r = (await fetch(`${app.server?.origin || '.'}/api/admin/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }).then((x) => (x.ok ? x.json() : null)).catch(() => null)) as { code?: string; origin?: string } | null;
     if (!r?.code) return void (box.innerHTML = `<p class="err" role="alert">${t('The server could not make a code. Try again.')}</p>`);
-    box.innerHTML = `<div class="phone"><div class="pi"><b>${t('On the TV')}</b><span class="muted">${t('Open Dholphin, choose this server in the list or enter its address, then this code. It works once, for ten minutes; a new one comes before then.')}</span><span class="purl">${esc(r.origin ?? location.origin)}</span><span class="tvc" style="font-size:56px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums">${esc(r.code)}</span></div></div>`;
+    box.innerHTML = `<div class="phone"><div class="pi"><b>${t('On the TV')}</b><span class="muted">${t('Open Dholphin, choose this server in the list or enter its address, then this code. It works once, for ten minutes; a new one comes before then.')}</span><span class="purl">${esc(app.server?.origin || r.origin || location.origin)}</span><span class="tvc" style="font-size:56px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums">${esc(r.code)}</span></div></div>`;
     A(box, [{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: 280 });
   };
   $('#here').onclick = () => {

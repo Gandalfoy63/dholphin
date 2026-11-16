@@ -1,5 +1,6 @@
 // Docs: docs/05 - UI-UX/Focus and Remote.md
-// Purpose: typing with the remote: an on-screen keyboard that writes to the last focused field.
+// Purpose: typing: the device's own keyboard in real inputs (Android, a browser), or on CoolDash an on-screen keyboard.
+import { app } from './app';
 import { $, $$, esc, ico } from './dom';
 import { go } from './focus';
 import { t } from './i18n';
@@ -33,8 +34,23 @@ const savedLayout = (): LayoutId => {
   }
 };
 
-/** The keyboard. `full` (keys and addresses) is Latin with digits and Shift; otherwise it offers every script. */
+/**
+ * Whether this device types with its own keyboard: Android TV has the system's (and a phone's), a browser has the
+ * computer's. Only CoolDash OS, whose kiosk shows no system keyboard, draws one on screen.
+ */
+export const nativeTyping = () => app.host.id !== 'cooldash' && !keysWanted();
+/** A browser on a TV with only a remote can ask for the on-screen keyboard: `localStorage['dholphin.typing'] = 'keys'`. */
+const keysWanted = () => {
+  try {
+    return localStorage.getItem('dholphin.typing') === 'keys';
+  } catch {
+    return false;
+  }
+};
+
+/** The keyboard. `full` (keys and addresses) is Latin with digits and Shift; otherwise it offers every script. None where the device types. */
 export function keyboardHtml(full = true) {
+  if (nativeTyping()) return '';
   const end = `<button class="f key wide" type="button" data-k=" ">${t('Space')}</button><button class="f key" type="button" data-k="del" aria-label="${t('Delete')}">${ico('delete', 's')}</button>`;
   if (full) return `<div class="kb full">${keysHtml([...LETTERS, ...REST])}<button class="f key" type="button" data-k="shift" aria-pressed="false" style="grid-column:span 2">${t('Shift')}</button>${end}</div>`;
   const now = savedLayout(), lay = LAYOUTS.find((l) => l.id === now)!;
@@ -49,6 +65,7 @@ const loadPinyin = async () => (pinyin ??= await fetch('./pinyin.json').then((r)
  * replace what they just typed (a 'del', then the new text). Chinese builds the pinyin, then a picked character is typed.
  */
 export function bindKeyboard(root: ParentNode, onKey: (k: string) => void) {
+  if (!$('.kb', root)) return;
   let upper = false, layout: LayoutId = ($('.kb', root).dataset.layout as LayoutId | undefined) ?? 'abc';
   let last: string | null = null, open: Syllable | null = null, typed = '';
   const write = (drop: number, add: string) => {
@@ -159,4 +176,42 @@ export function bindFields(root: ParentNode, changed?: () => void) {
   });
   return () => Object.fromEntries(inputs.map((i) => [i.dataset.key!, i.value.trim()]));
 }
-export const firstKey = (root: ParentNode) => $('.kb .key', root);
+export const firstKey = (root: ParentNode) => $('.kb .key', root) ?? $('.field input', root);
+
+/**
+ * One line of text (a search, a name): an input where the device types, else the text as typed above the on-screen
+ * keyboard. `type: 'search'` makes the system keyboard offer Search.
+ */
+export function lineHtml(o: { label: string; value?: string; max: number; type?: 'search' | 'text' }) {
+  if (!nativeTyping()) return `<div class="nm" aria-live="polite">${esc(o.value ?? '')}</div>${keyboardHtml(false)}`;
+  return `<input class="f line" type="${o.type ?? 'text'}" aria-label="${esc(o.label)}" placeholder="${esc(o.label)}" value="${esc(o.value ?? '')}" maxlength="${o.max}" autocomplete="off" autocapitalize="${o.type === 'search' ? 'off' : 'words'}" spellcheck="false" enterkeyhint="${o.type === 'search' ? 'search' : 'done'}">`;
+}
+
+/**
+ * Binds a line from `lineHtml`. `onValue` gets the whole text after each change; `shown` changes how the on-screen
+ * version displays it (a capital first letter). Returns a setter, for a suggestion chosen elsewhere.
+ */
+export function bindLine(root: ParentNode, o: { value?: string; max: number; onValue: (v: string) => void; shown?: (v: string) => string }) {
+  const input = $<HTMLInputElement>('input.line', root);
+  if (input) {
+    input.addEventListener('input', () => o.onValue(input.value));
+    return (v: string) => {
+      input.value = v;
+      o.onValue(v);
+    };
+  }
+  let v = o.value ?? '';
+  const paint = () => ($('.nm', root).textContent = o.shown ? o.shown(v) : v);
+  bindKeyboard(root, (k) => {
+    v = k === 'del' ? v.slice(0, -1) : (v + k).slice(0, o.max);
+    paint();
+    o.onValue(v);
+  });
+  return (next: string) => {
+    v = next.slice(0, o.max);
+    paint();
+    o.onValue(v);
+  };
+}
+/** Where typing starts: the input, else the first key. */
+export const lineStart = (root: ParentNode) => $('input.line', root) ?? $('.kb .key', root);

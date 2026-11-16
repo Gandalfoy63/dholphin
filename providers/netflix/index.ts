@@ -41,23 +41,28 @@ export function netflix(ctx: ProviderContext, endpoints: () => Endpoints): Provi
   // A plain browser can't read netflix.com's cookie or come back from its pages. The tests' stand-in is same-origin.
   const androidTv = () => ctx.host.id === 'android';
   const reachable = () => ctx.host.id === 'cooldash' || new URL(endpoints().netflix, location.href).origin === location.origin;
+  // In a plain browser Netflix is turned on, as on Android: the account is the one signed in on netflix.com, in its
+  // own tab. Before, it stayed "not connected" there, and every Netflix title read "Not on your services".
+  const inTab = () => ctx.host.id === 'browser' && !reachable();
+  const switched = () => androidTv() || inTab();
   // On Android the Netflix app holds the account: Dholphin only needs to be told to use it.
-  const signedIn = async () => (androidTv() ? (await ctx.get<boolean>('on')) === true : !!(await ctx.host.cookie(endpoints().netflix, 'NetflixId')));
+  const signedIn = async () => (switched() ? (await ctx.get<boolean>('on')) === true : !!(await ctx.host.cookie(endpoints().netflix, 'NetflixId')));
   return {
     id: 'netflix',
     name: 'Netflix',
     logos: ['netflix.png'],
     get blurb() {
+      if (inTab()) return "Opens on Netflix's site in a new tab, signed in to your account there.";
       return androidTv() ? 'Plays in the Netflix app on this TV, signed in to your account there.' : "You sign in on Netflix's own page. Films play in Netflix's own player, with its menu.";
     },
-    onOff: androidTv,
+    onOff: switched,
     watchProviderId: NETFLIX_TMDB_ID,
     async status() {
       if (androidTv()) {
         if (!(await ctx.host.hasApp!(NETFLIX_APP.packages))) return { connected: false, detail: 'Install the Netflix app on this TV first' };
         return (await signedIn()) ? { connected: true, detail: 'On' } : { connected: false, detail: 'Off' };
       }
-      if (!reachable()) return { connected: false, detail: 'Sign-in works on CoolDash OS, not in a plain browser' };
+      if (inTab()) return (await signedIn()) ? { connected: true, detail: 'On' } : { connected: false, detail: 'Off' };
       return (await signedIn()) ? { connected: true } : { connected: false, detail: 'Not signed in' };
     },
     async connect() {
@@ -65,11 +70,11 @@ export function netflix(ctx: ProviderContext, endpoints: () => Endpoints): Provi
         if (!(await ctx.host.hasApp!(NETFLIX_APP.packages))) throw new Error('Install the Netflix app on this TV first');
         return ctx.set('on', true);
       }
-      if (!reachable()) throw new Error('Netflix sign-in works on CoolDash OS, not in a plain browser');
+      if (inTab()) return ctx.set('on', true);
       await ctx.host.openExternal(`${endpoints().netflix}/login`, 'login');
     },
     async disconnect() {
-      if (androidTv()) return ctx.del('on');
+      if (switched()) return ctx.del('on');
       await ctx.host.removeCookies(endpoints().netflix);
     },
     async availability(titles) {

@@ -7,7 +7,13 @@ import { A, $, $$, cascade, esc, RISE } from './dom';
 import { t as tr } from './i18n';
 import { bindCards, cardHtml, type Item } from './rows';
 
-type Sort = 'you' | 'grade';
+export type Sort = 'you' | 'grade' | 'name' | 'new';
+const SORT_LABEL: Record<Sort, string> = { you: 'For you', grade: 'Best rated', name: 'A to Z', new: 'Recently added' };
+/**
+ * `heading` replaces "All titles"; `sorts` are the orders offered, the first one on; `added` dates a title for
+ * Recently added (else its release); `bare` keeps titles without a picture (a home video).
+ */
+export interface EverythingOptions { heading?: string; sorts?: Sort[]; added?: (t: Title) => number; bare?: boolean }
 /** How many titles show at once, and how many source pages are asked for each time the list runs low. */
 const CHUNK = 40, PAGES = 4;
 
@@ -16,12 +22,13 @@ const CHUNK = 40, PAGES = 4;
  * about (Home: films and series; Series; Movies; Anime; a category's own lists). Titles come once each. Sorting
  * applies to what is loaded; titles loaded later are sorted among themselves and added below, so nothing above moves.
  */
-export function appendEverything(scroller: HTMLElement, after: Element, source: (page: number) => Promise<Title[]>, open: (it: Item, el: HTMLElement) => void) {
+export function appendEverything(scroller: HTMLElement, after: Element, source: (page: number) => Promise<Title[]>, open: (it: Item, el: HTMLElement) => void, o: EverythingOptions = {}) {
   if ($('.every', scroller)) return;
-  after.insertAdjacentHTML('afterend', `<section class="every" aria-label="${esc(tr('All titles'))}"><div class="every-head"><h2>${tr('All titles')}</h2><div class="btns" role="group" aria-label="${esc(tr('Sort'))}"><button class="f chip" type="button" data-sort="you" aria-pressed="true">${tr('For you')}</button><button class="f chip" type="button" data-sort="grade" aria-pressed="false">${tr('Best rated')}</button></div></div><div class="grid every-grid"></div><p class="muted every-end" hidden>${tr("That's everything")}</p></section>`);
+  const sorts = o.sorts ?? ['you', 'grade'], heading = o.heading ?? tr('All titles');
+  after.insertAdjacentHTML('afterend', `<section class="every" aria-label="${esc(heading)}"><div class="every-head"><h2>${esc(heading)}</h2><div class="btns" role="group" aria-label="${esc(tr('Sort'))}">${sorts.map((s, i) => `<button class="f chip" type="button" data-sort="${s}" aria-pressed="${i === 0}">${tr(SORT_LABEL[s])}</button>`).join('')}</div></div><div class="grid every-grid"></div><p class="muted every-end" hidden>${tr("That's everything")}</p></section>`);
   const sec = $('.every', scroller), grid = $('.every-grid', sec);
   A($('.every-head', sec), RISE, { duration: 380 });
-  let sort: Sort = 'you', page = 1, done = false, busy = false;
+  let sort: Sort = sorts[0]!, page = 1, done = false, busy = false;
   const seen = new Set<string>();
   // Sorted blocks: each one loaded at once and sorted on its own; shown block after block.
   const blocks: Title[][] = [];
@@ -29,6 +36,11 @@ export function appendEverything(scroller: HTMLElement, after: Element, source: 
 
   const order = async (list: Title[]): Promise<Title[]> => {
     if (sort === 'you') return (await app.engine.byAffinity(list.map((title) => ({ title })))).map((i) => i.title);
+    if (sort === 'name') return [...list].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+    if (sort === 'new') {
+      const at = (x: Title) => o.added?.(x) ?? (Date.parse(x.release ?? '') || (x.year ? Date.UTC(x.year, 0) : 0));
+      return [...list].sort((a, b) => at(b) - at(a));
+    }
     // By grade, weighed by votes: a 10 from one vote doesn't come before a 8.5 from a hundred thousand.
     const g = (x: Title) => rankGrade(x, app.catalog.overall(x)?.value);
     return [...list].sort((a, b) => g(b) - g(a));
@@ -38,7 +50,7 @@ export function appendEverything(scroller: HTMLElement, after: Element, source: 
     busy = true;
     const got = (await Promise.all(Array.from({ length: PAGES }, (_, i) => source(page + i).catch(() => [] as Title[])))).flat();
     page += PAGES;
-    const fresh = got.filter((x) => !seen.has(x.key) && (x.backdrop || x.poster) && seen.add(x.key));
+    const fresh = got.filter((x) => !seen.has(x.key) && (o.bare || x.backdrop || x.poster) && seen.add(x.key));
     if (!fresh.length) done = true;
     else blocks.push(await order(fresh));
     busy = false;

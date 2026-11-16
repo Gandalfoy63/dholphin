@@ -13,11 +13,12 @@ export async function startPlay(p: Provider, title: Title, episode?: Episode, st
     // The languages and quality chosen last time start the stream, so it rarely needs to change.
     const session = await p.play!({ title, episode, startSec, choice: { audioLang: prefs.audioLang, subtitleLang: prefs.subtitleLang, maxBitrate: prefs.maxBitrate } }, app.profile);
     if (session.kind === 'external') {
-      if (app.host.leavesPage) saveReturn({ titleKey: title.key, title });
+      const stays = !app.host.leavesPage || !!app.host.newTab?.(session.url);
+      if (!stays) saveReturn({ titleKey: title.key, title });
       await app.host.openExternal(session.url, 'play', { title, provider: p.id }, session.app);
-      // Where the page waits behind the service's app, nothing reports back: opening it counts as watching, in History
-      // without a position, so it is not offered in Continue Watching.
-      if (!app.host.leavesPage) {
+      // Where the page waits behind the service's app (or its tab), nothing reports back: opening it counts as
+      // watching, in History without a position, so it is not offered in Continue Watching.
+      if (stays) {
         await app.library.watched(title, { progress: 0, provider: p.id });
         await app.library.signal(title, 'watched');
       }

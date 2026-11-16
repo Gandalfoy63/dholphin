@@ -40,13 +40,21 @@ const shot = (p, n) => p.screenshot({ path: join(OUT, `${n}.png`) });
 /** Opens a title through Search: a title now appears in only one row, so its row depends on the rows above it. */
 async function openBySearch(p, name) {
   await p.evaluate(() => document.querySelector('[data-go="search"]').click());
-  await until(p, () => document.querySelector('.kb'));
+  await until(p, () => document.querySelector('.srch input.line'));
   await p.waitForTimeout(250);
-  for (const c of name.toLowerCase()) await p.locator(`.kb [data-k="${c === ' ' ? ' ' : c}"]`).click();
+  await p.locator('.srch input.line').fill(name.toLowerCase());
   await p.waitForFunction((n) => [...document.querySelectorAll('#res .card')].some((c) => c.getAttribute('aria-label') === n), name, { timeout: 15000 });
   await p.waitForTimeout(150);
   await p.locator(`#res .card[aria-label="${name}"]`).focus();
   await p.keyboard.press('Enter');
+}
+
+/** Opens Series, Movies, Anime or TV Shows: from Home's section tiles, as they are no longer in the menu. */
+async function section(p, id) {
+  await p.evaluate(() => document.querySelector('[data-go="home"]').click());
+  await until(p, () => document.querySelector('.row.sects [data-sect]'));
+  await p.waitForTimeout(200);
+  await p.locator(`[data-sect="${id}"]`).click();
 }
 
 /** Moves focus to the element with this text, by real key presses. */
@@ -84,12 +92,13 @@ check('A refused key says so', (await p.locator('.err').textContent()).includes(
 await p.fill('#fld-tmdb', 'good-key');
 await press(p, 'Continue');
 
-await until(p, () => document.querySelector('.nm'));
+await until(p, () => document.querySelector('input.line'));
 check('A profile needs a name', await p.locator('#nx').isDisabled());
-await key(p, 'Enter'); // "a" from the on-screen keyboard
-await key(p, 'ArrowRight');
-await key(p, 'Enter'); // "b"
-check('The on-screen keyboard types', (await p.locator('.nm').textContent()) === 'Ab');
+check('In a browser the name is a real input, focused, with no on-screen keyboard', !(await p.locator('.kb').count()) && (await p.evaluate(() => document.activeElement?.classList.contains('line'))));
+await p.keyboard.type('Ab');
+check('The computer\'s keyboard types into it', (await p.locator('input.line').inputValue()) === 'Ab' && !(await p.locator('#nx').isDisabled()));
+await key(p, 'ArrowLeft');
+check('Left moves the cursor inside the field', await p.evaluate(() => document.activeElement?.classList.contains('line') && document.activeElement.selectionStart === 1));
 await shot(p, '03-profile');
 await press(p, 'Continue');
 
@@ -181,14 +190,14 @@ check('New Arrivals are big posters', bigCard.height > bigCard.width * 1.4 && bi
 check('Empty rows hide themselves', await p.locator('.row[data-row="continue"]').evaluate((r) => r.hidden));
 check('A profile that picked no anime gets no anime on Home', await p.evaluate(() => ![...document.querySelectorAll('.row:not([hidden]) .card')].some((c) => /^(Anime \d|Wild Geometry)/.test(c.getAttribute('aria-label') ?? '')) && !document.querySelector('.row[data-row="anilist-trending"]:not([hidden]) .card')));
 
-// The Anime page, from the menu: only anime, its own rows. Jikan never answers: its row gives up and hides, the rest show.
-await p.evaluate(() => document.querySelector('[data-go="anime"]').click());
+// The Anime page, from Home's tiles: only anime, its own rows. Jikan never answers: its row gives up and hides, the rest show.
+await section(p, 'anime');
 const animeStart = Date.now();
 await p.waitForFunction(() => document.querySelector('.row[data-row="anime-films"] .card') && document.querySelector('.row[data-row="mal-airing"]')?.hidden, null, { timeout: 20000 });
 await p.waitForTimeout(400);
 await shot(p, '08c-anime');
 const animePage = await p.evaluate(() => ({ cards: [...document.querySelectorAll('.row:not([hidden]) .card')].map((c) => c.getAttribute('aria-label')), rows: [...document.querySelectorAll('.row:not([hidden])')].filter((r) => r.querySelector('.card')).map((r) => r.dataset.row) }));
-check('The menu has Anime, like Series and Movies', await p.evaluate(() => !!document.querySelector('[data-go="anime"]')));
+check('Series, Movies, Anime and TV Shows are no longer in the menu: Home has them', await p.evaluate(() => ['series', 'movies', 'anime', 'tvshows'].every((x) => !document.querySelector(`.ni[data-go="${x}"]`))));
 check('The Anime page shows only anime', animePage.cards.length > 0 && animePage.cards.every((n) => /^(Anime \d|Animation \d|Wild Geometry)/.test(n)), JSON.stringify(animePage));
 await until(p, () => document.querySelector('.hero .hp'));
 check('The Anime page opens on a featured anime, like the other pages', /^(Anime \d|Animation \d|Wild Geometry)/.test(await p.locator('.hero h1').textContent()), await p.locator('.hero h1').textContent());
@@ -196,14 +205,13 @@ check('TV programmes stay out of the Anime page', !animePage.cards.some((n) => /
 check('A source that never answers hides its row within seconds, and the rows below still load', Date.now() - animeStart < 15000 && animePage.rows.includes('anime-films'), `${Date.now() - animeStart} ms ${animePage.rows}`);
 
 // TV programmes: their own page; never in Series. The sketch show TMDB calls a comedy is known by its channel.
-check('The menu has TV Shows', await p.evaluate(() => !!document.querySelector('[data-go="tvshows"]')));
-await p.evaluate(() => document.querySelector('[data-go="tvshows"]').click());
+await section(p, 'tvshows');
 await p.waitForFunction(() => [...document.querySelectorAll('.row:not([hidden]) .card')].length > 1, null, { timeout: 20000 });
 await p.waitForTimeout(600);
 await shot(p, '08d-tvshows');
 const shows = await p.evaluate(() => [...new Set([...document.querySelectorAll('.row:not([hidden]) .card, .hero h1')].map((c) => c.getAttribute('aria-label') ?? c.textContent))]);
 check('TV Shows lists talk shows, reality and the entertainment channels\' sketch shows', ['Sketch Hour', 'Late Night Talk', 'Island Survivors'].every((n) => shows.includes(n)), shows.join());
-await p.evaluate(() => document.querySelector('[data-go="series"]').click());
+await section(p, 'series');
 await p.waitForFunction(() => document.querySelectorAll('.row:not([hidden]) .card').length > 10, null, { timeout: 20000 });
 await p.waitForTimeout(1500);
 const seriesNames = await p.evaluate(() => [...document.querySelectorAll('.card')].map((c) => c.getAttribute('aria-label')));
@@ -229,7 +237,8 @@ await p.waitForTimeout(800);
 await shot(p, '08b-menu-hover');
 const labels = await p.evaluate(() => [...document.querySelectorAll('.rail .rname,.rail .ni>span:not(.av)')].map((s) => { const r = s.getBoundingClientRect(), b = document.elementFromPoint(r.left + 4, r.top + r.height / 2); return Number(getComputedStyle(s).opacity) === 1 && r.width > 0 && !!b?.closest('.rail'); }));
 check('Opening the menu shows its name and every label', labels.length >= 9 && labels.every(Boolean), labels.join());
-await p.mouse.move(1000, 700, { steps: 3 });
+// Over the hero's picture, where nothing takes focus.
+await p.mouse.move(1000, 40, { steps: 3 });
 await until(p, () => !document.querySelector('.rail.open'));
 check('Leaving the menu closes it', true);
 await p.locator('.hero .hp').focus();
@@ -776,16 +785,219 @@ await until(p, () => document.querySelector('.lst .li'));
 check('Time watched on Netflix lands in History', (await p.locator('.lst').innerText()).includes('Pale Signal'));
 await p.locator('.lst .li', { hasText: 'Pale Signal' }).first();
 
+// Home's section tiles: always the second row, each pictured by its best title of the month; OK opens the section.
+await p.evaluate(() => document.querySelector('[data-go="home"]').click());
+await until(p, () => document.querySelectorAll('.row.sects .card.sect img.art').length === 4);
+await p.waitForTimeout(400);
+{
+  const order = await p.evaluate(() => [...document.querySelectorAll('.scroller > .row')].filter((r) => !r.hidden).map((r) => r.dataset.row));
+  check('Home shows Series, Movies, Anime and TV Shows as its second row', order[1] === 'sections' && (await p.locator('.row.sects .card.sect').allInnerTexts()).map((x) => x.split('\n')[0].trim()).join() === 'Series,Movies,Anime,TV Shows', JSON.stringify(order.slice(0, 3)));
+  check('Each tile says which title of the month it shows', (await p.locator('.row.sects .sbest').allInnerTexts()).every((x) => x.startsWith('Best this month: ')));
+  check('The menu has no Back button', !(await p.locator('.rail [data-go="back"]').count()));
+  await p.locator('.sect[data-sect="movies"]').focus();
+  await key(p, 'Enter');
+  await until(p, () => document.querySelector('.ni.cur')?.dataset.go === 'home' && !document.querySelector('.row.sects'));
+  check('OK on a tile opens its section, and the menu marks Home', true);
+  await key(p, 'Escape');
+  await until(p, () => document.querySelector('.row.sects'));
+  check('Back from a section returns to Home', true);
+}
+
+// A computer, as a website: the wheel scrolls the page, a sideways swipe a row, the pointer never moves the page;
+// a row's arrows turn it; a wide window is filled.
+await p.evaluate(() => document.querySelector('[data-go="home"]').click());
+await until(p, () => document.querySelectorAll('.row[data-row="trending"] .card').length > 6);
+await p.waitForTimeout(400);
+{
+  const row = p.locator('.row[data-row="trending"]');
+  /** Wheel events, sent to an element as the browser would under the pointer. */
+  const wheel = (sel, dx, dy, n = 1) => p.evaluate(async ([s, x, y, k]) => {
+    for (let i = 0; i < k; i++) {
+      document.querySelector(s).dispatchEvent(new WheelEvent('wheel', { deltaX: x, deltaY: y, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 8));
+    }
+  }, [sel, dx, dy, n]);
+  const pageY = () => p.evaluate(() => -Number(/translateY\((-?[\d.]+)px\)/.exec(document.querySelector('#ct > .scroller').style.transform)?.[1] ?? 0));
+  const trackX = () => p.evaluate(() => -Number(/translateX\((-?[\d.]+)px\)/.exec(document.querySelector('.row[data-row="trending"] .track').style.transform)?.[1] ?? 0));
+  await row.locator('.card').first().focus();
+  await p.waitForTimeout(400);
+  const y0 = await pageY(), focused = await p.evaluate(() => document.activeElement.getAttribute('aria-label'));
+  await wheel('#ct > .scroller', 0, 30, 10);
+  await p.waitForTimeout(250);
+  check('The wheel scrolls the page by pixels, and focus stays where it was', Math.abs((await pageY()) - y0 - 300) < 2 && (await p.evaluate(() => document.activeElement.getAttribute('aria-label'))) === focused, `${y0} ${await pageY()}`);
+  await wheel('.row[data-row="trending"] .card', 25, 0, 8);
+  await p.waitForTimeout(250);
+  check('A sideways swipe over a row turns that row by pixels', Math.abs((await trackX()) - 200) < 2, String(await trackX()));
+  await wheel('.row[data-row="trending"] .card', -400, 0);
+  await p.waitForTimeout(250);
+  check('It stops at the row\'s start, without opening the menu', (await trackX()) === 0 && !(await p.locator('.rail.open').count()));
+  // The pointer over a card low on the screen: it takes focus, the page doesn't move.
+  const y1 = await pageY();
+  const low = await p.evaluate(() => { const c = [...document.querySelectorAll('.row:not([hidden]) .card')].filter((x) => { const r = x.getBoundingClientRect(); return r.top > 500 && r.bottom < 1075 && r.left > 200 && r.right < 1900; }).sort((x, y) => y.getBoundingClientRect().top - x.getBoundingClientRect().top)[0]; if (!c) return null; const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, name: c.getAttribute('aria-label') }; });
+  await p.mouse.move(low.x, low.y, { steps: 2 });
+  await p.waitForTimeout(450);
+  check('Hovering a card low on the screen focuses it without scrolling the page', (await pageY()) === y1 && (await p.evaluate(() => document.activeElement.getAttribute('aria-label'))) === low.name, `${y1} ${await pageY()}`);
+  // The arrows, in view as the remote leaves the row.
+  await row.locator('.card').nth(1).focus();
+  await key(p, 'ArrowLeft');
+  await p.waitForTimeout(500);
+  const box = await row.boundingBox();
+  await p.mouse.move(box.x + box.width / 2, box.y + 30);
+  await p.waitForTimeout(200);
+  check('Over a row, the mouse sees an arrow to the next cards and none back', await row.locator('.rarr.r').isVisible() && !(await row.locator('.rarr.l').isVisible()), JSON.stringify(box));
+  await row.locator('.rarr.r').click();
+  await p.waitForTimeout(300);
+  const after = await p.evaluate(() => [...document.activeElement.closest('.row').querySelectorAll('.card')].indexOf(document.activeElement));
+  check('The arrow turns the row by a screen', after === 5 && (await trackX()) === 5 * 340 && (await row.locator('.rarr.l').isVisible()), `${after} ${await trackX()}`);
+  await p.setViewportSize({ width: 2200, height: 1000 });
+  await p.waitForTimeout(300);
+  check('A wide window is filled: the canvas widens instead of black bars', await p.evaluate(() => document.querySelector('#tv').offsetWidth > 1920 && Math.abs(document.querySelector('#tv').getBoundingClientRect().width - innerWidth) < 2));
+  await p.setViewportSize({ width: 1920, height: 1080 });
+  await p.waitForTimeout(300);
+}
+
+// Library: every service's titles from the title index, one list, A to Z by default; filters on top that are kept;
+// letters at the side; only the rows in view are drawn.
+await p.evaluate(() => document.querySelector('[data-go="library"]').click());
+await until(p, () => document.querySelectorAll('.lvirt .card').length > 5 && /titles/.test(document.querySelector('#lsum')?.textContent ?? ''));
+await p.waitForTimeout(500);
+await shot(p, '21b-library');
+{
+  const names = () => p.evaluate(() => [...document.querySelectorAll('.lvirt .card')].sort((a, b) => a.dataset.i - b.dataset.i).map((c) => c.getAttribute('aria-label')));
+  const az = await names();
+  const sorted = [...az].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base', numeric: true, ignorePunctuation: true }));
+  const total = Number((await p.locator('#lsum').textContent()).replace(/\D/g, ''));
+  check('The Library is one list, A to Z by default, with no shelves', JSON.stringify(az) === JSON.stringify(sorted) && !(await p.locator('.lvirt .row, .lib, .shelf').count()), az.slice(0, 8).join());
+  check('It holds Jellyfin\'s titles and Netflix\'s, each once', az.includes('Black Orchard') && az.includes('Blue Hour') && new Set(az).size === az.length);
+  check('Every title is counted, and only the rows in view are drawn', total > az.length && az.length <= 6 * 6, `${total} ${az.length}`);
+  check('The address names the page', (await p.evaluate(() => location.hash)) === '#library');
+  check('Letters at the side; those with no title are dimmed and skipped', await p.locator('.letters').isVisible() && (await p.locator('.letters .lt1').count()) === 27 && (await p.locator('.lt1.none').count()) > 0 && (await p.evaluate(() => [...document.querySelectorAll('.lt1.none')].every((b) => b.disabled))));
+  check('The red mark is on the letter where the list is', (await p.locator('.lt1.cur').getAttribute('data-l')) === az[0].normalize('NFD').charAt(0).toUpperCase().replace(/[^A-Z]/, '#'));
+  check('The filter bar shows each filter and its value', (await p.locator('.lbar .lsel').allInnerTexts()).map((x) => x.replace(/\s+/g, ' ').trim()).join(' | ') === 'Services All | Type Movies and series | Period Any period | Rating Any rating | Order A to Z');
+  // The wheel: the list scrolls, and the rows coming into view are drawn.
+  const most = () => p.evaluate(() => Math.max(...[...document.querySelectorAll('.lvirt .card')].map((c) => Number(c.dataset.i))));
+  const before = await most();
+  await p.evaluate(async () => { for (let i = 0; i < 10; i++) { document.querySelector('.lvirt').dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true })); await new Promise((r) => setTimeout(r, 10)); } });
+  await p.waitForTimeout(300);
+  check('The wheel scrolls the list, drawing the rows that come into view', (await most()) > before, `${before} ${await most()}`);
+  // A letter: the list scrolls to it, the red mark moves to it.
+  await p.locator('.lt1[data-l="P"]').click();
+  await p.waitForTimeout(500);
+  const firstP = await p.evaluate(() => [...document.querySelectorAll('.lvirt .card')].filter((c) => /^p/i.test(c.getAttribute('aria-label'))).sort((a, b) => a.dataset.i - b.dataset.i)[0]?.getBoundingClientRect().top ?? -1);
+  check('A letter scrolls the list to it, and the red mark follows', firstP >= 0 && firstP < 600 && (await p.locator('.lt1.cur').getAttribute('data-l')) === 'P', String(firstP));
+  // Like a dock: the letter under the pointer rises, its neighbours a little.
+  const m = await p.locator('.lt1[data-l="M"]').boundingBox();
+  await p.mouse.move(m.x + m.width / 2, m.y + m.height / 2, { steps: 3 });
+  await p.waitForTimeout(250);
+  await shot(p, '21d-library-letters');
+  const scale = (l) => p.evaluate((x) => Number(/scale\(([\d.]+)\)/.exec(document.querySelector(`.lt1[data-l="${x}"]`).style.transform)?.[1] ?? 1), l);
+  check('The letter under the pointer rises into a disc, its neighbours a little', (await scale('M')) > 1.6 && (await scale('L')) > 1.1 && (await scale('L')) < (await scale('M')) && (await scale('E')) === 1 && (await p.locator('.lt1.up').getAttribute('data-l')) === 'M');
+  await p.mouse.move(900, 40);
+  // Back to the top with the wheel, then a click beside a dialog closes it.
+  await p.evaluate(() => document.querySelector('.lvirt').dispatchEvent(new WheelEvent('wheel', { deltaY: -50000, bubbles: true, cancelable: true })));
+  await p.waitForTimeout(400);
+  await p.locator('#lso').click();
+  await until(p, () => document.querySelector('.lchoose'));
+  await p.mouse.click(80, 540);
+  await until(p, () => !document.querySelector('.lchoose'));
+  check('A click beside a dialog closes it', true);
+  // Order: best rated first, through the choice that opens from the bar.
+  await p.locator('#lso').focus();
+  await key(p, 'Enter');
+  await until(p, () => document.querySelector('.lchoose'));
+  await shot(p, '21c-library-order');
+  await p.locator('.lopt', { hasText: 'Best rated' }).click();
+  await until(p, () => !document.querySelector('.lchoose') && document.querySelector('#lso b')?.textContent === 'Best rated' && document.querySelector('.lvirt .card'));
+  await p.waitForTimeout(300);
+  check('Best rated first: no letters then', !(await p.locator('.letters').isVisible()));
+  // Period and services: the 1990s, Netflix turned off.
+  await p.locator('#ler').click();
+  await until(p, () => document.querySelector('.lchoose'));
+  await p.locator('.lopt', { hasText: 'Before 1980' }).click();
+  await until(p, () => !document.querySelector('.lchoose') && document.querySelector('#ler b')?.textContent === 'Before 1980');
+  await p.waitForTimeout(500);
+  const years = await p.evaluate(() => [...document.querySelectorAll('.lvirt .card')].map((c) => Number(c.dataset.y)));
+  check('A period keeps only its years, and Reset appears', years.length > 0 && years.every((y) => y < 1980) && (await p.locator('#lrs').count()) === 1, years.join());
+  await p.locator('#ler').click();
+  await until(p, () => document.querySelector('.lchoose'));
+  await p.locator('.lopt', { hasText: 'Any period' }).click();
+  await until(p, () => !document.querySelector('.lchoose'));
+  await p.locator('#lsv').click();
+  await until(p, () => document.querySelector('.lchoose .lopt[aria-pressed]'));
+  await p.locator('.lopt', { hasText: 'Netflix' }).click();
+  await p.locator('#ldone').click();
+  await until(p, () => !document.querySelector('.lchoose') && document.querySelector('#lsv b')?.textContent === 'Jellyfin' && document.querySelector('.lvirt .card'));
+  await p.waitForTimeout(400);
+  const jfOnly = await names();
+  check('Turning Netflix off leaves Jellyfin\'s titles only', jfOnly.includes('The Long Quiet') && !jfOnly.includes('Pale Signal'), jfOnly.join());
+  // Every service off: the page says so. Then Jellyfin back on.
+  const services = async (name) => {
+    await p.locator('#lsv').click();
+    await until(p, () => document.querySelector('.lchoose .lopt[aria-pressed]'));
+    await p.locator('.lopt', { hasText: name }).click();
+    await p.locator('#ldone').click();
+    await until(p, () => !document.querySelector('.lchoose'));
+    await p.waitForTimeout(400);
+  };
+  await services('Jellyfin');
+  check('With every service off, the page says so', (await p.locator('.lstate').innerText()).includes('Every service is turned off') && !(await p.locator('.lvirt .card').count()));
+  await services('Jellyfin');
+  await until(p, () => document.querySelector('#lsv b')?.textContent === 'Jellyfin' && document.querySelector('.lvirt .card'));
+  // Kept: leave and come back, the filters are still there.
+  await p.evaluate(() => document.querySelector('[data-go="home"]').click());
+  await until(p, () => document.querySelector('.row.sects'));
+  await p.evaluate(() => document.querySelector('[data-go="library"]').click());
+  await until(p, () => document.querySelector('#lso b')?.textContent === 'Best rated' && document.querySelector('#lsv b')?.textContent === 'Jellyfin');
+  check('The filters are kept for the next visit', true);
+  await p.locator('#lrs').click();
+  await until(p, () => document.querySelector('#lso b')?.textContent === 'A to Z' && !document.querySelector('#lrs'));
+  check('Reset brings everything back, A to Z', true);
+  // The browser's own Back does the app's Back: from the Library to Home, without leaving the site.
+  await p.goBack();
+  await until(p, () => document.querySelector('.row.sects'));
+  check('The browser\'s Back goes back inside the app', (await p.evaluate(() => location.hash)) === '#home');
+}
+
 // Search, list, settings
 await p.evaluate(() => document.querySelector('[data-go="search"]').click());
-await until(p, () => document.querySelector('.kb'));
-await p.locator('.kb [data-k="t"]').focus();
-for (const c of 'tide') {
-  await p.locator(`.kb [data-k="${c}"]`).click();
-}
+await until(p, () => document.querySelector('.srch input.line'));
+await p.locator('.srch input.line').focus();
+await p.keyboard.type('tide');
 await until(p, () => document.querySelector('#res .card'));
 await shot(p, '22-search');
 check('Search finds as you type', (await p.locator('#res .card').evaluateAll((l) => l.map((c) => c.getAttribute('aria-label')))).includes('Low Tide'));
+await p.locator('.srch input.line').fill('low tied');
+await until(p, () => document.querySelector('#res .card')?.getAttribute('aria-label') === 'Low Tide');
+check('Search forgives typos', true);
+await key(p, 'Enter');
+check('Enter in the search line goes to the results', await p.evaluate(() => !!document.activeElement?.closest('#res')));
+const allFound = await p.locator('#res .card').count();
+await p.locator('[data-k2="mine"]').click();
+await p.waitForTimeout(200);
+check('Available to me narrows the results to what plays on a service', (await p.locator('#res .card').count()) <= allFound && (await p.locator('[data-k2="mine"]').getAttribute('aria-pressed')) === 'true');
+await p.locator('[data-k2="all"]').click();
+await p.waitForTimeout(300);
+check('Under the people, categories you might like: four at most, each opening its category', (await p.locator('#res .scats .scat').count()) >= 1 && (await p.locator('#res .scats .scat').count()) <= 4);
+check('No pills: chips are rounded rectangles', await p.evaluate(() => getComputedStyle(document.querySelector('[data-k2="all"]')).borderTopLeftRadius === '10px'));
+// People: four, in one row, each with a picture and a name.
+await p.locator('.srch input.line').fill('ava');
+await until(p, () => document.querySelectorAll('#res .sppl .sp').length);
+await p.waitForTimeout(400);
+await shot(p, '22b-search-people');
+const spl = await p.evaluate(() => [...document.querySelectorAll('#res .sppl .sp')].map((b) => ({ top: Math.round(b.getBoundingClientRect().top), name: b.querySelector('b')?.textContent, pic: !!b.querySelector('.spic') })));
+check('Search shows four people, in one row, each with a picture and a name', spl.length === 4 && new Set(spl.map((x) => x.top)).size === 1 && spl.every((x) => x.name && x.pic), JSON.stringify(spl));
+await p.locator('.srch input.line').fill('tide');
+await until(p, () => document.querySelector('#res .card'));
+// The on-screen keyboard, which a browser on a TV with only a remote can ask for, as CoolDash OS always has it.
+await p.evaluate(() => localStorage.setItem('dholphin.typing', 'keys'));
+await p.evaluate(() => document.querySelector('[data-go="home"]').click());
+await p.waitForTimeout(400);
+await p.evaluate(() => document.querySelector('[data-go="search"]').click());
+await until(p, () => document.querySelector('.kb'));
+await p.locator('.kb [data-k="t"]').focus();
+for (const c of 'tide') await p.locator(`.kb [data-k="${c}"]`).click();
+await until(p, () => document.querySelector('#res .card'));
+check('The on-screen keyboard types into Search', (await p.locator('.srch .nm').textContent()) === 'tide');
 // Other scripts: a tab per script. Korean joins jamo into syllables, Japanese marks change the last kana, Chinese picks from pinyin.
 const typed = () => p.locator('.srch .nm').textContent();
 const tap = async (k) => { await p.locator(`.kb [data-k="${k}"]`).focus(); await key(p, 'Enter'); };
@@ -809,11 +1021,20 @@ await key(p, 'Enter');
 check('Picking a character types it and clears the pinyin', (await typed()) === '中' && await p.locator('.kbc').isHidden(), await typed());
 await tap('del');
 await p.locator('.kbl [data-l="abc"]').click();
+await p.evaluate(() => localStorage.removeItem('dholphin.typing'));
 await p.evaluate(() => document.querySelector('[data-go="settings"]').click());
 await until(p, () => document.querySelector('#ks'));
 await p.waitForTimeout(300);
 await shot(p, '23-settings');
 check('Settings shows both providers connected', (await p.locator('.prov .muted').allTextContents()).filter((t) => t === 'Connected').length === 2);
+await until(p, () => /titles/.test(document.querySelector('#ixs')?.textContent ?? ''));
+check('Settings shows the title index: each service, its count and age', /Netflix: [\d,]+ titles/.test(await p.locator('#ixs').textContent()) && /Jellyfin: [\d,]+ titles/.test(await p.locator('#ixs').textContent()), await p.locator('#ixs').textContent());
+check('The index serves the Library and Search by default', (await p.locator('[data-ix="1"]').getAttribute('aria-pressed')) === 'true');
+await p.locator('[data-ix="0"]').click();
+await until(p, () => document.querySelector('[data-ix="0"]')?.getAttribute('aria-pressed') === 'true');
+check('It can serve the Library only, and the choice is kept', (await p.evaluate(() => new Promise((ok) => { const r = indexedDB.open('dholphin-v2', 1); r.onsuccess = () => { const q = r.result.transaction('kv').objectStore('kv').get('index:forSearch'); q.onsuccess = () => ok(q.result); }; }))) === false);
+await p.locator('[data-ix="1"]').click();
+await until(p, () => document.querySelector('[data-ix="1"]')?.getAttribute('aria-pressed') === 'true');
 
 // Languages
 await p.locator('[data-l="fr-FR"]').click();
@@ -855,10 +1076,12 @@ await p.locator('[data-l="en-US"]').click();
 await until(p, () => document.querySelector('[data-go="home"] span')?.textContent === 'Home');
 check('Switching back works', true);
 
-// Back on a fresh start: goes to Home directly, with the taste kept
+// Back on a fresh start: no setup again, and the page in the address (Settings) is where it opens.
 await p.reload();
+await until(p, () => document.querySelector('.ni.cur')?.dataset.go === 'settings' && document.querySelector('[data-l="en-US"]'));
+check('A restart skips setup, and a reload stays on the page it was on', true);
+await p.evaluate(() => document.querySelector('[data-go="home"]').click());
 await until(p, () => document.querySelector('.hero .hp'));
-check('A restart skips setup', true);
 await p.evaluate(() => document.querySelector('[data-go="who"]').click());
 await until(p, () => document.querySelector('.who'));
 await p.waitForTimeout(500);
@@ -878,7 +1101,7 @@ await shot(p, '24b-actors');
 const offered = await p.locator('.acm .ac:not(.none) b').allTextContents();
 check('The picker offers the most popular actors, with photos only, and no directors', offered.includes('Ava Stone') && !offered.includes('Dana Director') && !offered.includes('Faceless Actor'), offered.slice(0, 8).join());
 check('It opens on the first actor, and offers no photo too', (await focused(p)) === 'Ava Stone' && (await p.locator('.acm .ac.none').count()) === 1, await focused(p));
-for (const c of 'zoe') { await p.locator(`.acm .kb [data-k="${c}"]`).focus(); await key(p, 'Enter'); }
+await p.locator('.acm input.line').fill('zoe');
 await until(p, () => [...document.querySelectorAll('.acm .ac b')].every((b) => b.textContent.startsWith('Zoe')) && document.querySelector('.acm .ac'));
 check('Typing a name searches TMDB for actors', (await p.locator('.acm .ac b').first().textContent()) === 'Zoe Hart');
 await p.locator('.acm .ac').first().focus();
@@ -959,9 +1182,10 @@ console.log('Android TV, with a stand-in for the app');
   const ps = calls.findLast((c) => c.m === 'phoneStart');
   check('The key step shows a QR code for typing on a phone', !!ps && JSON.parse(ps.a[1]).map((f) => f.key).join() === 'tmdb,omdb,trakt,google' && (await a.locator('.purl').textContent()).startsWith('http://192.168'));
   await a.evaluate(() => dispatchEvent(new CustomEvent('dholphin', { detail: { t: 'phone', values: { tmdb: 'good-key', omdb: 'x' } } })));
-  await until(a, () => document.querySelector('.nm'));
+  await until(a, () => document.querySelector('input.line'));
   check('Keys typed on the phone are checked and saved, and setup goes on', calls.some((c) => c.m === 'phoneStop'));
-  await key(a, 'Enter');
+  check('On Android TV the name is a real input, for the system keyboard, with no on-screen keyboard', !(await a.locator('.kb').count()));
+  await a.locator('input.line').fill('Tv');
   await press(a, 'Continue');
   await until(a, () => document.querySelector('[data-c="netflix"]'));
   await a.waitForTimeout(400);
@@ -1125,6 +1349,10 @@ console.log('Dholphin server');
   await until(web, () => document.querySelector('#srvp'));
   check('With the web app, the server panel is in Settings', (await web.locator('#srvp').textContent()) === 'Server panel');
   await web.screenshot({ path: join(OUT, '43-server-web-settings.png') });
+  check('In the web app Netflix is turned on rather than signed in to: it opens in its own tab', (await web.locator('[data-p="netflix"]').textContent()) === 'Turn on', await web.locator('[data-p="netflix"]').textContent());
+  await web.locator('[data-p="netflix"]').click();
+  await until(web, () => document.querySelector('[data-p="netflix"]')?.textContent === 'Turn off');
+  check('Turned on, it says so', true);
 
   // Jellyfin at a local address, relayed by the server: Sam signs in from the panel, and the linked TV is connected as Sam.
   const sam = await pp.evaluate(async (jf) => {

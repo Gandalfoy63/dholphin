@@ -10,7 +10,7 @@ process.env.DATA = DATA;
 process.env.NODE_ENV = 'test';
 const realFetch = globalThis.fetch;
 const upstreamCalls = [];
-let base = '', server, state, isPrivate;
+let base = '', server, state, isPrivate, publicBase;
 
 beforeAll(async () => {
   // Calls to the outside are answered here: TMDB, and a Jellyfin and a Seerr on the "home network".
@@ -22,7 +22,7 @@ beforeAll(async () => {
     if (url.startsWith('http://192.168.1.20:5055/api/v1/status')) return new Response(JSON.stringify({ ok: true }), { headers: { 'content-type': 'application/json' } });
     return new Response('{}', { status: 404 });
   };
-  ({ server, state, isPrivate } = await import('../server/main.mjs'));
+  ({ server, state, isPrivate, publicBase } = await import('../server/main.mjs'));
   await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -113,5 +113,17 @@ describe('server', () => {
     expect(['https://jellyfin.example.com', 'https://media.my-home.fr'].some(isPrivate)).toBe(false);
     expect((await call('/../server/main.mjs', { cookie })).status).toBe(404);
     expect((await call('/%2e%2e/server/main.mjs', { cookie })).status).toBe(404);
+  });
+  it('finds its public address behind a proxy, from the headers it sends', () => {
+    const at = (headers) => publicBase({ headers });
+    // nginx by default: its own name for the server as Host, nothing else.
+    expect(at({ host: 'dholphin:8080' })).toBe('http://dholphin:8080');
+    expect(at({ host: 'dholphin:8080', 'x-forwarded-proto': 'https', 'x-forwarded-host': 'tv.example.com' })).toBe('https://tv.example.com');
+    expect(at({ host: 'dholphin:8080', 'x-forwarded-proto': 'https', 'x-forwarded-host': 'tv.example.com', 'x-forwarded-prefix': '/dholphin/' })).toBe('https://tv.example.com/dholphin');
+    expect(at({ host: 'dholphin:8080', 'x-forwarded-proto': 'http', 'x-forwarded-host': 'nas', 'x-forwarded-port': '8443' })).toBe('http://nas:8443');
+    expect(at({ host: 'dholphin:8080', forwarded: 'for=1.2.3.4;proto=https;host="tv.example.com"' })).toBe('https://tv.example.com');
+    // Nothing but a host and a port is taken from a header.
+    expect(at({ host: 'x', 'x-forwarded-host': 'evil.com/path?q' })).toBe('http://localhost');
+    expect(at({ host: 'x', 'x-forwarded-prefix': '//evil.com' })).toBe('http://x');
   });
 });

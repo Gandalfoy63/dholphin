@@ -3,9 +3,11 @@
 import { createProviders } from '@providers/registry';
 import { createHost } from '@hosts/index';
 import { Catalog, DEFAULT_ENDPOINTS, type Endpoints } from '@/core/catalog';
+import { key as nameKey } from '@/core/dubbing';
 import { Engine } from '@/core/engine';
 import { Library } from '@/core/library';
-import { idbStore, routedStore, serverStore, type Store } from '@/core/store';
+import { idbStore, rebaseServer, routedStore, serverStore, type Store } from '@/core/store';
+import { TitleIndex } from '@/core/titleindex';
 import type { Availability, Host, Profile, Provider, ProviderContext, Title } from '@/sdk/types';
 import { viaApp } from './dom';
 
@@ -35,6 +37,8 @@ class App {
   profile!: Profile;
   library!: Library;
   engine!: Engine;
+  /** Every service's titles, kept on the device for the Library and Search only. */
+  index!: TitleIndex;
   private offersKnown = new Map<string, Availability>();
 
   /** Set when this app uses a Dholphin server: the panel's address, and whether this device linked to it (a TV). */
@@ -55,9 +59,14 @@ class App {
         return real(input, { ...init, headers });
       };
     }
-    this.config = await fetch(link ? `${link.origin}/config.json` : './config.json').then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    // Where this app reached its server: the linked address, or the folder the web app was served from (a proxy may
+    // put it under a path). The server's own idea of its address can be wrong behind a proxy: it is replaced by this one.
+    const reached = link ? link.origin : new URL('.', location.href).href.replace(/\/$/, '');
+    this.config = await fetch(`${reached}/config.json`).then((r) => (r.ok ? r.json() : {})).catch(() => ({}));
+    const said = this.config.server?.origin ?? '';
+    if (this.config.mode === 'server') this.config = rebaseServer(this.config, said, reached);
     if (this.config.mode === 'server' && this.config.store) {
-      this.store = routedStore(device, await serverStore(this.config.store, device));
+      this.store = routedStore(device, await serverStore(this.config.store, device, fetch, (v) => rebaseServer(v, said, reached)));
       this.server = { panel: this.config.server?.panel ?? '', origin: this.config.server?.origin ?? '', linked: !!link };
     } else if (link) {
       // Linked, but the server can't be reached: its data as last seen, kept on the device.
@@ -83,6 +92,12 @@ class App {
       log: (...a) => console.info(`[${id}]`, ...a),
     });
     this.providers = createProviders(ctxFor, () => this.endpoints);
+    this.index = new TitleIndex({
+      store: { get: (k) => this.store.get(k), set: (k, v) => this.store.set(k, v), del: (k) => this.store.del(k), keys: (p) => this.store.keys(p) },
+      providers: () => this.providers, profile: () => this.profile,
+      scope: () => ({ region: this.catalog.region, language: this.catalog.language, maturity: this.catalog.maturity }),
+      discoverRaw: (kind, params) => this.catalog.discoverRaw(kind, params), blocked: () => this.catalog.blockedGenres(),
+    });
     this.profiles = (await this.store.get<Profile[]>('profiles')) ?? [];
   }
 
@@ -115,25 +130,74 @@ class App {
     await this.store.set('lastProfile', p.id);
     // TV programmes are told from series before the rows load; a slow answer doesn't hold the profile up.
     await Promise.race([this.catalog.loadTvShows().catch(() => undefined), new Promise((ok) => setTimeout(ok, 4000))]);
-    await Promise.allSettled(this.providers.map((q) => q.refresh?.(p)));
+    // A big library read through a relay can take a while: the profile starts after 8 seconds at most, and the read
+    // goes on; asking where a title plays waits for it.
+    await Promise.race([Promise.allSettled(this.providers.map((q) => q.refresh?.(p))), new Promise((ok) => setTimeout(ok, 8000))]);
+    // The title index, for the Library and Search: read again in the background when old, never waited for.
+    setTimeout(() => void this.index.refresh().catch(() => undefined), 3000);
   }
 
   private quickAvailability(t: Title): Availability {
     return this.offersKnown.get(t.key) ?? 'none';
   }
+  /** What is known of where a title plays, without asking: after `primeOffers` or `offers`. */
+  availabilityOf = (t: Title) => this.quickAvailability(t);
 
   /** Where a title can be played or requested, by provider. */
   async offers(t: Title): Promise<{ provider: Provider; state: Availability }[]> {
-    const out: { provider: Provider; state: Availability }[] = [];
+    return (await this.offerCheck(t)).offers;
+  }
+  /** The offers, and the services that couldn't say (a server that didn't answer), so "not on your services" isn't claimed. */
+  async offerCheck(t: Title): Promise<{ offers: { provider: Provider; state: Availability }[]; failed: Provider[] }> {
+    const out: { provider: Provider; state: Availability }[] = [], failed: Provider[] = [];
     await Promise.all(this.providers.map(async (provider) => {
-      const a = await provider.availability?.([t], this.profile).catch(() => null);
+      const a = await provider.availability?.([t], this.profile).catch(() => {
+        failed.push(provider);
+        return null;
+      });
       const state = a?.get(t.key);
       if (state && state !== 'none') out.push({ provider, state });
     }));
     out.sort((a, b) => Number(b.state === 'playable') - Number(a.state === 'playable'));
     const best = out[0]?.state ?? 'none';
-    this.offersKnown.set(t.key, best);
-    return out;
+    if (!failed.length || best === 'playable') this.offersKnown.set(t.key, best);
+    return { offers: out, failed };
+  }
+
+  /**
+   * Search: TMDB's titles, and each service's own (what only it has, such as a home video). One entry per title:
+   * TMDB's, which knows more, when both have it. TMDB wants the words right, so when it finds little, each word is
+   * also asked on its own: "low tied" finds Low Tide through "low". Those extra titles are `loose`: kept only if the
+   * core finds the words typed in them, typos forgiven.
+   */
+  async search(q: string): Promise<{ titles: Title[]; loose: Set<string> }> {
+    const [tmdb, ...own] = await Promise.all([
+      this.catalog.search(q),
+      ...this.providers.map((p) => p.search?.(q, this.profile).catch(() => [] as Title[]) ?? Promise.resolve([] as Title[])),
+    ]);
+    const byKey = new Map(tmdb.map((x) => [x.key, x]));
+    // A service's entry without a TMDB ID can still be one of TMDB's: the same IMDb ID, or kind, name and year.
+    const same = (a: Title, b: Title) => (!!a.imdbId && a.imdbId === b.imdbId) || (a.kind === b.kind && nameKey(a.name) === nameKey(b.name) && (!a.year || !b.year || Math.abs(a.year - b.year) <= 1));
+    for (const x of own.flat()) if (!byKey.has(x.key) && !tmdb.some((y) => same(x, y))) byKey.set(x.key, x);
+    const loose = new Set<string>();
+    // The title index (every service's catalogue, kept on the device), when Settings has it serve Search too: what
+    // TMDB's search didn't bring, kept only if the ranking finds the words in it.
+    for (const x of (await this.index.forSearch()) ? await this.index.find(q).catch(() => [] as Title[]) : []) {
+      if (byKey.has(x.key) || [...byKey.values()].some((y) => (!!y.tmdbId && y.tmdbId === x.tmdbId && y.kind === x.kind) || same(x, y))) continue;
+      byKey.set(x.key, x);
+      loose.add(x.key);
+    }
+    const words = [...new Set(q.trim().split(/\s+/).filter((w) => w.length >= 3))];
+    if (byKey.size < 5 && (words.length > 1 || (words[0]?.length ?? 0) >= 6)) {
+      // One long word: its start too, where a typo near the end is likeliest ("intersteller": "inter").
+      const asks = words.length > 1 ? words : [words[0]!.slice(0, Math.ceil(words[0]!.length / 2))];
+      for (const x of (await Promise.all(asks.map((w) => this.catalog.search(w).catch(() => [] as Title[])))).flat()) {
+        if (byKey.has(x.key)) continue;
+        byKey.set(x.key, x);
+        loose.add(x.key);
+      }
+    }
+    return { titles: [...byKey.values()], loose };
   }
 
   /** Marks titles for ranking, without asking about each one. */

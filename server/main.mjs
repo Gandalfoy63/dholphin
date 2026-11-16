@@ -12,8 +12,12 @@ const HERE = import.meta.dirname;
 const DATA = process.env.DATA ?? join(HERE, '..', 'data');
 const DIST = process.env.DIST ?? join(HERE, '..', 'web', 'dist');
 const PORT = Number(process.env.PORT ?? 8080);
-// Behind Traefik, the visitor's address and the public scheme and host come in X-Forwarded-* headers.
+// Behind a proxy, the visitor's address comes in X-Forwarded-For: trusted only with TRUST_PROXY=1, as it decides the
+// limit on sign-in tries.
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+// The server's public address, when the proxy doesn't say it (see publicBase): https://tv.example.com or .../dholphin.
+const PUBLIC_URL = (process.env.PUBLIC_URL ?? '').trim().replace(/\/+$/, '');
+const PUBLIC_PATH = PUBLIC_URL ? new URL(PUBLIC_URL).pathname.replace(/\/+$/, '') : '';
 const VERSION = (() => { try { return readFileSync(join(HERE, '..', 'VERSION'), 'utf8').trim(); } catch { return 'dev'; } })();
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.wasm': 'application/wasm', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff', '.json': 'application/json', '.webmanifest': 'application/manifest+json' };
 
@@ -29,12 +33,27 @@ if (!state.settings.data.password) console.log(`Dholphin first setup code: ${sta
 
 // ---------- small helpers ----------
 const ipOf = (req) => (TRUST_PROXY ? String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim() : '') || req.socket.remoteAddress || '?';
-const originOf = (req) => {
-  const proto = TRUST_PROXY ? String(req.headers['x-forwarded-proto'] ?? '').split(',')[0] || 'http' : 'http';
-  const host = (TRUST_PROXY ? String(req.headers['x-forwarded-host'] ?? '').split(',')[0] : '') || req.headers.host;
-  return `${proto}://${host}`;
+const first = (v) => String(v ?? '').split(',')[0].trim();
+/**
+ * The address the visitor reached this server at, with the path a proxy put it under: every address given to the app
+ * (its config, the data store, the relay to Jellyfin and Seerr) is built on it. In order: PUBLIC_URL; the standard
+ * Forwarded header or X-Forwarded-Proto, -Host and -Prefix (Traefik, Caddy and most proxies send them); the Host header.
+ * They are read with or without TRUST_PROXY: they only change the addresses sent back to whoever sent them.
+ * The app checks these addresses against the one it used, and corrects them (rebaseServer in src/core/store.ts).
+ */
+export const publicBase = (req) => {
+  if (PUBLIC_URL) return PUBLIC_URL;
+  const fwd = Object.fromEntries(first(req.headers.forwarded).split(';').map((kv) => kv.split('=').map((x) => x.trim().replace(/^"|"$/g, ''))).filter(([k, v]) => k && v).map(([k, v]) => [k.toLowerCase(), v]));
+  const proto = (fwd.proto || first(req.headers['x-forwarded-proto']) || 'http').toLowerCase() === 'https' ? 'https' : 'http';
+  let host = fwd.host || first(req.headers['x-forwarded-host']) || req.headers.host || 'localhost';
+  const port = first(req.headers['x-forwarded-port']);
+  if (port && !fwd.host && !/:\d+$/.test(host) && port !== (proto === 'https' ? '443' : '80')) host += `:${port}`;
+  // Only a host (and port) is taken, never a path or anything a browser would read as more.
+  if (!/^[\w.-]+(:\d+)?$|^\[[\da-f:.]+\](:\d+)?$/i.test(host)) host = 'localhost';
+  const prefix = first(req.headers['x-forwarded-prefix']).replace(/\/+$/, '');
+  return `${proto}://${host}${/^(\/[\w.~-]+)*$/.test(prefix) ? prefix : ''}`;
 };
-const secure = (req) => originOf(req).startsWith('https:');
+const secure = (req) => publicBase(req).startsWith('https:');
 function send(res, status, body, type = 'application/json', extra = {}) {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
   res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...extra });
@@ -71,7 +90,7 @@ const relayed = (url) => !!url && (state.settings.data.relay === 'on' || (state.
  * WebView can't call it from the app at any address, and its key (an admin's) then stays on the server.
  */
 const seerrRelayed = (url) => !!url && state.settings.data.relay !== 'off';
-const relayBase = (req, device, service) => `${originOf(req)}/api/r/${device.relay}/${service}`;
+const relayBase = (req, device, service) => `${publicBase(req)}/api/r/${device.relay}/${service}`;
 
 async function relay(req, res, service, rest) {
   const s = state.settings.data, target = service === 'jellyfin' ? s.jellyfin : s.seerr;
@@ -131,7 +150,7 @@ function storeDel(key) {
 
 /** The app's config: every film data service through the server, keys as placeholders, the data in /api/store. */
 function appConfig(req) {
-  const s = state.settings.data, o = originOf(req);
+  const s = state.settings.data, o = publicBase(req);
   return {
     mode: 'server', server: { version: VERSION, panel: `${o}/panel`, origin: o },
     // APP_ENDPOINTS (JSON) adds or changes the other services' addresses: the tests point them at stand-ins.
@@ -179,7 +198,7 @@ async function jellyfinSignIn(profileId, user, password) {
  */
 function cors(req, res) {
   const o = req.headers.origin;
-  if (!o || o === originOf(req)) return;
+  if (!o || o === new URL(publicBase(req)).origin) return;
   res.setHeader('Access-Control-Allow-Origin', o);
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Emby-Authorization, X-Emby-Token, X-MediaBrowser-Token, X-Api-Key, Range');
@@ -188,7 +207,10 @@ function cors(req, res) {
 }
 
 async function handle(req, res) {
-  const url = new URL(req.url, 'http://x'), p = decodeURIComponent(url.pathname);
+  const url = new URL(req.url, 'http://x');
+  // A proxy that passes the path under PUBLIC_URL's as it is (no prefix stripped): the server answers it too.
+  if (PUBLIC_PATH && (url.pathname === PUBLIC_PATH || url.pathname.startsWith(`${PUBLIC_PATH}/`))) url.pathname = url.pathname.slice(PUBLIC_PATH.length) || '/';
+  const p = decodeURIComponent(url.pathname);
   const json = (status, body, extra) => send(res, status, body, 'application/json', extra);
   cors(req, res);
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Max-Age': '600' }); return res.end(); }
@@ -216,7 +238,7 @@ async function handle(req, res) {
     const b = await readBody(req, 10_000);
     if (!pairLimit(ipOf(req)) || !pairs.use(b.code)) return json(403, { message: 'Wrong or expired code. Make a new one in the panel.' });
     const { token } = newDevice(state, b.name ?? 'TV', 'device');
-    return json(200, { token, server: { version: VERSION, origin: originOf(req) } });
+    return json(200, { token, server: { version: VERSION, origin: publicBase(req) } });
   }
   let m;
   if ((m = /^\/api\/img\/([^/]+)\/([^/]+)$/.exec(p))) {
@@ -281,7 +303,7 @@ async function handle(req, res) {
       state.settings.save();
       return json(200, { ok: true });
     }
-    if (p === '/api/admin/pair' && req.method === 'POST') return json(200, { code: pairs.create(), origin: originOf(req) });
+    if (p === '/api/admin/pair' && req.method === 'POST') return json(200, { code: pairs.create(), origin: publicBase(req) });
     if ((m = /^\/api\/admin\/devices\/([\w]+)$/.exec(p)) && req.method === 'DELETE') { removeDevice(state, m[1]); return json(200, adminState()); }
     if (p === '/api/admin/profiles' && req.method === 'POST') {
       const b = await readBody(req, 20_000), list = state.store.data.profiles ?? [];

@@ -46,7 +46,8 @@ fn run(call: &Call) -> Result<Value, String> {
         "search" => {
             let q: String = arg(a, "query")?;
             let t: types::Taste = arg(a, "taste")?;
-            to(serde_json::to_value(search::rank(&q, &arg::<Vec<types::Title>>(a, "titles")?, &t)))
+            let boost: Option<std::collections::HashMap<String, f64>> = arg(a, "boost")?;
+            to(serde_json::to_value(search::rank(&q, &arg::<Vec<types::Title>>(a, "titles")?, &t, &boost.unwrap_or_default())))
         }
         other => Err(format!("unknown op {other}")),
     }

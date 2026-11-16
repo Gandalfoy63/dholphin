@@ -6,7 +6,7 @@ import { app, COLORS } from './app';
 import { A, $, $$, cascade, DOL, esc, ico, plogo, leave, reduced, tvScale, TV, FADE, FADE_OUT, RISE } from './dom';
 import { go, nav } from './focus';
 import { t } from './i18n';
-import { bindKeyboard, keyboardHtml } from './textentry';
+import { bindLine, lineHtml } from './textentry';
 import { pickActor } from './actors';
 import { bindSetup, setupHtml } from './setup';
 import { connectProvider } from './onboarding';
@@ -111,14 +111,13 @@ function pin(el: HTMLElement, p: Profile, ok: () => void) {
 
 function editor(p: Profile, done: () => void) {
   let name = p.name, color = p.color, kids = !!p.kids, pinValue = p.pin ?? '', photo = p.photo, photoOf = p.photoOf;
-  TV().innerHTML = `<div class="onb"><div class="obody" style="justify-content:center"><h1>${esc(t('Edit {name}', { name: p.name }))}</h1><div class="two"><div class="stack"><div class="nm">${esc(name)}</div>${keyboardHtml(false)}</div><div class="stack">${avatar({ name, color, photo }).replace('class="av ', 'id="pa" class="av ')}${actorButton(photoOf)}<span class="muted">${t('Colour')}</span><div class="swatches">${COLORS.map((c) => `<button class="f sw" type="button" aria-label="Colour" style="background:${c}" aria-pressed="${c === color}" data-c="${c}"></button>`).join('')}</div><button class="f chip" id="kids" type="button" aria-pressed="${kids}">${t('Kids profile')}</button><div class="btns" id="accts">${app.providers.filter((q) => q.fields?.length && q.connect).map((q) => `<button class="f btn" type="button" data-acct="${q.id}">${plogo(q.logos[0]!)}${esc(q.name)}</button>`).join('')}</div><div class="btns" style="margin-top:32px"><button class="f btn pri" id="sv" type="button">${t('Save')}</button><button class="f btn" id="cn" type="button">${t('Cancel')}</button><button class="f btn" id="rm" type="button" ${app.profiles.length < 2 ? 'disabled' : ''}>${ico('trash-2', 's')}${t('Delete')}</button></div></div></div></div></div>`;
+  TV().innerHTML = `<div class="onb"><div class="obody" style="justify-content:center"><h1>${esc(t('Edit {name}', { name: p.name }))}</h1><div class="two"><div class="stack">${lineHtml({ label: t('Name'), value: name, max: 14 })}</div><div class="stack">${avatar({ name, color, photo }).replace('class="av ', 'id="pa" class="av ')}${actorButton(photoOf)}<span class="muted">${t('Colour')}</span><div class="swatches">${COLORS.map((c) => `<button class="f sw" type="button" aria-label="Colour" style="background:${c}" aria-pressed="${c === color}" data-c="${c}"></button>`).join('')}</div><button class="f chip" id="kids" type="button" aria-pressed="${kids}">${t('Kids profile')}</button><div class="btns" id="accts">${app.providers.filter((q) => q.fields?.length && q.connect).map((q) => `<button class="f btn" type="button" data-acct="${q.id}">${plogo(q.logos[0]!)}${esc(q.name)}</button>`).join('')}</div><div class="btns" style="margin-top:32px"><button class="f btn pri" id="sv" type="button">${t('Save')}</button><button class="f btn" id="cn" type="button">${t('Cancel')}</button><button class="f btn" id="rm" type="button" ${app.profiles.length < 2 ? 'disabled' : ''}>${ico('trash-2', 's')}${t('Delete')}</button></div></div></div></div></div>`;
   const tv = TV();
-  bindKeyboard(tv, (k) => {
-    name = k === 'del' ? name.slice(0, -1) : (name + k).slice(0, 14);
-    $('.nm', tv).textContent = name;
+  bindLine(tv, { value: name, max: 14, onValue: (v) => {
+    name = v;
     preview();
     $<HTMLButtonElement>('#sv', tv).disabled = !name.trim();
-  });
+  } });
   const preview = () => ($('#pa', tv).outerHTML = avatar({ name: name || p.name, color, photo }).replace('class="av ', 'id="pa" class="av '));
   $$('.sw', tv).forEach((s) => (s.onclick = () => {
     color = s.dataset.c!;

@@ -263,6 +263,18 @@ export class Catalog {
       .filter((r) => r.id && r.name && r.profile_path && !r.adult && r.known_for_department === 'Acting' && !seen.has(r.id) && !!seen.add(r.id))
       .map((r) => ({ id: r.id!, name: r.name!, photo: r.profile_path!, known: (r.known_for ?? []).map((k) => k.title ?? k.name).filter((x): x is string => !!x).slice(0, 2) }));
   }
+  /**
+   * People matching a search, of any trade (actors, directors), most known first: those with a photo, never adult
+   * entries. Shares the actor picker's cache. Docs: TMDB/Search Person.
+   */
+  async searchPeople(query: string): Promise<Actor[]> {
+    const q = query.trim();
+    if (!q) return [];
+    const j = await cached(this.store, `tmdb:people:${this.language}:${q.toLowerCase()}`, DAY, () => this.tmdb('/search/person', { query: q, include_adult: 'false' }));
+    return ((j as { results?: TmdbPeople[] }).results ?? [])
+      .filter((r) => r.id && r.name && r.profile_path && !r.adult)
+      .map((r) => ({ id: r.id!, name: r.name!, photo: r.profile_path!, known: (r.known_for ?? []).map((k) => k.title ?? k.name).filter((x): x is string => !!x).slice(0, 2) }));
+  }
   // Never send `region` to discover: TMDB then answers with that country's release dates, so a 1994 film re-released
   // in 2019 reads as 2019. `watch_region` is what limits availability.
   /**
@@ -290,10 +302,15 @@ export class Catalog {
     ]);
     for (const t of lists.flat()) this.tvShows.add(t.key);
   }
-  discover = (kind: 'movie' | 'tv', params: Params) => {
+  discover = (kind: 'movie' | 'tv', params: Params) => this.list(`/discover/${kind}`, this.discoverParams(kind, params), kind);
+  private discoverParams(kind: 'movie' | 'tv', params: Params): Params {
     const cert = kind === 'movie' && MOVIE_CERT[this.maturity] ? { certification_country: 'US', 'certification.lte': MOVIE_CERT[this.maturity] } : {};
-    return this.list(`/discover/${kind}`, { include_adult: false, watch_region: this.region, ...cert, ...params }, kind);
-  };
+    return { include_adult: false, watch_region: this.region, ...cert, ...params };
+  }
+  /** One discover page as TMDB sends it: no cache, nothing remembered. For the title index. Docs: TMDB/Discover Movie. */
+  discoverRaw = (kind: 'movie' | 'tv', params: Params) => this.tmdb(`/discover/${kind}`, this.discoverParams(kind, params)) as Promise<{ results?: never[]; total_pages?: number }>;
+  /** The genres this profile's age limit leaves out, by name. */
+  blockedGenres = () => BLOCKED[this.maturity] ?? [];
   /**
    * TMDB IDs of the titles that won any of these awards, newest win first. TMDB has no awards, so this asks Wikidata:
    * the award statements (P166) with their year (P585), and each title's TMDB ID (P4947 films, P4983 series).

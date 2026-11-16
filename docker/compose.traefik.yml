@@ -13,6 +13,8 @@ services:
     environment:
       # Traefik passes the visitor's address and the public https address in X-Forwarded-* headers.
       TRUST_PROXY: "1"
+      # Only needed if Traefik doesn't pass the public address (see docs/04 - Architecture/Server.md, Behind a proxy).
+      PUBLIC_URL: ${PUBLIC_URL:-}
     networks: [traefik]
     labels:
       - traefik.enable=true

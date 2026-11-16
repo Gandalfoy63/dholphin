@@ -7,7 +7,7 @@ import { A, $, $$, esc, ico, logoMark, logoStart, plogo, TV, toast } from './dom
 import { focusables, go, nav } from './focus';
 import { getLocale, LANGUAGES, setLocale, t } from './i18n';
 import { artHtml } from './rows';
-import { bindFields, bindKeyboard, fieldsHtml, keyboardHtml } from './textentry';
+import { bindFields, bindLine, fieldsHtml, keyboardHtml, lineHtml, lineStart } from './textentry';
 import { saveReturn, setReturnContext } from './returning';
 import { bindPhone, phoneHtml } from './phone';
 import { actorButton, actorLabel, avatar } from './profiles';
@@ -142,14 +142,13 @@ function keys(o: HTMLElement, n: number) {
 }
 
 function who(o: HTMLElement, n: number) {
-  o.innerHTML = `<h1>${t('Who is this profile for?')}</h1><div class="two"><div class="stack"><div class="nm" aria-live="polite">${esc(cap(ob.name))}</div>${keyboardHtml(false)}</div><div class="stack">${face()}${actorButton(ob.photoOf)}<span class="muted">${t('Colour')}</span><div class="swatches">${COLORS.map((c) => `<button class="f sw" type="button" aria-label="Colour" style="background:${c}" aria-pressed="${c === ob.color}" data-c="${c}"></button>`).join('')}</div></div></div>${foot(!!ob.name.trim())}`;
-  $('.kb .key', o).dataset.first = '1'; // Start on the letters; the script tabs are one press up.
-  bindKeyboard(o, (k) => {
-    ob.name = k === 'del' ? ob.name.slice(0, -1) : (ob.name + k).slice(0, 14);
-    $('.nm', o).textContent = cap(ob.name);
+  o.innerHTML = `<h1>${t('Who is this profile for?')}</h1><div class="two"><div class="stack">${lineHtml({ label: t('Name'), value: ob.name, max: 14 })}</div><div class="stack">${face()}${actorButton(ob.photoOf)}<span class="muted">${t('Colour')}</span><div class="swatches">${COLORS.map((c) => `<button class="f sw" type="button" aria-label="Colour" style="background:${c}" aria-pressed="${c === ob.color}" data-c="${c}"></button>`).join('')}</div></div></div>${foot(!!ob.name.trim())}`;
+  lineStart(o).dataset.first = '1'; // Start on the letters (or the name's input); the script tabs are one press up.
+  bindLine(o, { value: ob.name, max: 14, shown: cap, onValue: (v) => {
+    ob.name = v;
     $('#pa', o).outerHTML = face();
     $<HTMLButtonElement>('#nx', o).disabled = !ob.name.trim();
-  });
+  } });
   $$('.sw', o).forEach((s) => (s.onclick = () => {
     ob.color = s.dataset.c!;
     $('#pa', o).outerHTML = face();

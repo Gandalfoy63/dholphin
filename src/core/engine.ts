@@ -137,9 +137,20 @@ export class Engine {
     return Object.entries(this.taste.features).filter(([k, v]) => k.startsWith('g:') && v > 0).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k]) => k.slice(2));
   }
 
-  searchOrder(query: string, titles: Title[]): Title[] {
+  /**
+   * Search results in order: the text match first (the core forgives typos and word order), then the score the rows
+   * use, so among equal matches what the profile is likely to like and can play comes first. Titles the search
+   * service returned that match no word typed (another language's title, say) follow, by the same score; `loose`
+   * ones, found by asking for a part of what was typed, only when they match.
+   */
+  async searchOrder(query: string, titles: Title[], loose: Set<string> = new Set()): Promise<Title[]> {
+    const a = await this.affinity(titles).catch(() => new Map<string, number>());
+    // Playable here 1, requestable 0.5, elsewhere 0 (from the 1, 0.7, 0.4 the rows use).
+    const boost = new Map(titles.map((t) => [t.key, 0.6 * (a.get(t.key) ?? 0) + 0.35 * Math.max(0, (this.availability(t) - 0.4) / 0.6)]));
     const byKey = new Map(titles.map((t) => [t.key, t]));
-    const keys = call<string[]>('search', { query, titles, taste: this.taste });
-    return keys.map((k) => byKey.get(k)!).filter(Boolean);
+    const keys = call<string[]>('search', { query, titles, taste: this.taste, boost: Object.fromEntries(boost) });
+    const hit = new Set(keys);
+    const rest = titles.filter((t) => !hit.has(t.key) && !loose.has(t.key)).sort((x, y) => boost.get(y.key)! - boost.get(x.key)!);
+    return [...keys.map((k) => byKey.get(k)!).filter(Boolean), ...rest];
   }
 }

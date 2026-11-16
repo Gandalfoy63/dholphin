@@ -38,8 +38,10 @@ button:disabled{opacity:.5;cursor:wait}
 <script>
 // A fresh server asks for the setup code from its log and a new password; afterwards, the password alone.
 const $ = (id) => document.getElementById(id);
+// The server may sit under a path behind a proxy (/dholphin/...): every address is relative to where this page is.
+const BASE = location.pathname.replace(/panel\/?$/, '').replace(/[^/]*$/, '');
 let setup = false;
-fetch('/api/status').then((r) => r.json()).then((s) => {
+fetch(BASE + 'api/status').then((r) => r.json()).then((s) => {
   setup = s.setup;
   if (setup) {
     $('lead').textContent = 'Set the household password. Everyone in the home uses it to sign in here and in the panel.';
@@ -53,8 +55,8 @@ $('f').onsubmit = async (e) => {
   $('go').disabled = true;
   $('err').textContent = '';
   const body = setup ? { code: $('code').value.trim(), password: $('pw').value, name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser' } : { password: $('pw').value, name: navigator.userAgent.includes('Mobile') ? 'Phone browser' : 'Browser' };
-  const r = await fetch(setup ? '/api/setup' : '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  if (r.ok) return location.replace(location.pathname === '/panel' ? '/panel' : '/');
+  const r = await fetch(BASE + (setup ? 'api/setup' : 'api/login'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (r.ok) return location.replace(location.pathname + location.hash);
   $('err').textContent = (await r.json().catch(() => ({}))).message ?? 'Something went wrong';
   $('go').disabled = false;
 };

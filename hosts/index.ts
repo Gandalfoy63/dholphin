@@ -35,12 +35,22 @@ function cooldash(c: Chrome): Host {
   };
 }
 
-/** Development and the demo: a service's own site is a page on the same origin. */
+/**
+ * A browser: the web app on a Dholphin server, development and the demo. The demo's stand-in for a service is a page on
+ * the same origin, left and come back from. A real service's site (netflix.com) can't send the page back, so it opens
+ * in a new tab, signed in there, and this page stays.
+ */
 function browser(): Host {
+  const foreign = (url: string) => new URL(url, location.href).origin !== location.origin;
   return {
     id: 'browser',
     leavesPage: true,
+    newTab: foreign,
     async openExternal(url, intent, meta) {
+      if (foreign(url)) {
+        window.open(url, '_blank', 'noopener');
+        return;
+      }
       sessionStorage.setItem('external', JSON.stringify({ intent, meta }));
       localStorage.removeItem('report');
       location.href = url;

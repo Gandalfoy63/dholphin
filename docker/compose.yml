@@ -9,5 +9,9 @@ services:
     restart: unless-stopped
     ports: ["${DHOLPHIN_PORT:-8080}:8080"]
     volumes: ["dholphin-data:/data"]
+    environment:
+      # Behind your own proxy (nginx, Caddy, Nginx Proxy Manager): its public address, if the proxy doesn't send
+      # X-Forwarded-Proto and -Host. https://tv.example.com, or with the path it is under: https://example.com/dholphin
+      PUBLIC_URL: ${PUBLIC_URL:-}
 volumes:
   dholphin-data: {}

@@ -2,7 +2,7 @@
 // Purpose: staying on a card plays its trailer in a preview above it, in YouTube's own embedded player.
 import type { Title } from '@/sdk/types';
 import { app } from './app';
-import { A, esc, ico, reduced, tvScale, TV, FADE, FADE_OUT } from './dom';
+import { A, esc, ico, reduced, tvScale, tvW, TV, FADE, FADE_OUT } from './dom';
 import { getLocale, t } from './i18n';
 
 /** How long focus stays on a card before its trailer plays, and the preview's size on the 1920 x 1080 canvas. */
@@ -53,7 +53,7 @@ function show(card: HTMLElement, tl: Title) {
   const tv = TV(), s = tvScale(), r = card.getBoundingClientRect(), box = tv.getBoundingClientRect();
   const left = (r.left - box.left) / s, top = (r.top - box.top) / s, w = r.width / s, h = r.height / s;
   // The card grows into the preview where it stands. Near the right edge it grows leftwards instead.
-  const x = Math.max(Math.min(left, 1920 - 40 - W), 140);
+  const x = Math.max(Math.min(left, tvW() - 40 - W), 140);
   const y = Math.max(Math.min(top, 1080 - 24 - H - INFO), 24);
   // The row makes room rather than being covered: cards after slide right, cards before slide left when the
   // preview had to move left, and the rows below slide down.

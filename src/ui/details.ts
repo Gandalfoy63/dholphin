@@ -4,8 +4,8 @@ import type { Provider, Title } from '@/sdk/types';
 import type { Person } from '@/core/cast';
 import type { Grade } from '@/core/catalog';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, plogo, tvScale, TV, toast, FADE, FADE_OUT, RISE } from './dom';
-import { go } from './focus';
+import { A, $, $$, cascade, esc, ico, plogo, tvScale, tvW, TV, toast, FADE, FADE_OUT, RISE } from './dom';
+import { go, nav } from './focus';
 import { getLocale, reasonText, t as tr } from './i18n';
 import { artHtml, bindCards, cardHtml, scoresHtml, type Item } from './rows';
 import { startPlay } from './play';
@@ -24,6 +24,7 @@ export async function openDetails(input: Title, from?: HTMLElement | null, why?:
   const L = $('.dlayer', tv), back = $('.dback', L), text = $('.dtext', L), scroll = $('.dscroll', L);
   // The page moves with focus, as Home does: the top for the buttons, a section's heading near the top for the rest.
   L.addEventListener('focusin', (e) => {
+    if (nav.pointer) return; // The pointer doesn't move the page; the wheel does.
     const sec = (e.target as HTMLElement).closest<HTMLElement>('[data-sec]');
     const most = Math.max(0, scroll.scrollHeight - 1080);
     scroll.style.transform = `translateY(${-(sec ? Math.min(most, Math.max(0, sec.offsetTop - 96)) : 0)}px)`;
@@ -31,7 +32,7 @@ export async function openDetails(input: Title, from?: HTMLElement | null, why?:
   });
   if (from) {
     const r = from.getBoundingClientRect(), o = tv.getBoundingClientRect(), s = tvScale();
-    A(back, [{ transform: `translate(${(r.left - o.left) / s}px,${(r.top - o.top) / s}px) scale(${r.width / s / 1920},${r.height / s / 1080})` }, { transform: 'none' }], { duration: 340 });
+    A(back, [{ transform: `translate(${(r.left - o.left) / s}px,${(r.top - o.top) / s}px) scale(${r.width / s / tvW()},${r.height / s / 1080})` }, { transform: 'none' }], { duration: 340 });
     back.style.transformOrigin = '0 0';
   } else A(back, FADE, { duration: 300 });
   A($('.scrim', back), FADE, { duration: 300, delay: 60 });
@@ -50,19 +51,21 @@ export async function openDetails(input: Title, from?: HTMLElement | null, why?:
     console.warn(e);
   }
   if (!L.isConnected) return;
-  const [offers, inList, ratings, requests, canReq] = await Promise.all([app.offers(t), app.library.inList(t.key), app.library.ratings(), app.library.requests(), app.canRequest()]);
+  const [{ offers, failed }, inList, ratings, requests, canReq] = await Promise.all([app.offerCheck(t), app.library.inList(t.key), app.library.ratings(), app.library.requests(), app.canRequest()]);
   if (!L.isConnected) return;
   const playable = offers.filter((o) => o.state === 'playable');
   const requested = requests.find((r) => r.key === t.key);
   const hist = (await app.library.history()).find((h) => h.key === t.key);
   const resume = startSec ?? (hist && hist.progress < 0.9 ? hist.positionSec : undefined);
-  const source = playable.length ? `<div class="offers">${playable.map((o) => provMark(o.provider)).join('')}</div>` : requested || (canReq && t.tmdbId) ? `<div class="offers">${canReq!.requestBrand ? `<span class="pvd">${plogo(canReq!.requestBrand.logo)}${esc(canReq!.requestBrand.name)}</span>` : provMark(canReq!)}</div>` : `<div class="dnone">${tr('Not on your services yet')}</div>`;
+  // A service that didn't answer may well have it: say so, rather than "not on your services" or a request.
+  const unsure = !playable.length && failed.length > 0;
+  const source = playable.length ? `<div class="offers">${playable.map((o) => provMark(o.provider)).join('')}</div>` : unsure ? `<div class="dnone">${esc(tr("{name} didn't answer: open it again in a moment", { name: failed.map((f) => f.name).join(', ') }))}</div>` : requested || (canReq && t.tmdbId) ? `<div class="offers">${canReq!.requestBrand ? `<span class="pvd">${plogo(canReq!.requestBrand.logo)}${esc(canReq!.requestBrand.name)}</span>` : provMark(canReq!)}</div>` : `<div class="dnone">${tr('Not on your services yet')}</div>`;
   const rating = ratings[t.key];
   const btn = (id: string, icon: string, label: string, on = false) => `<button class="f btn" id="${id}" type="button" aria-pressed="${on}">${ico(icon, 's')}${label}</button>`;
   // My List and the ratings: round icons that fill when on, named by a tip under them, so the row stays on one line.
   const mark = (id: string, icon: string, label: string, on = false) => `<button class="f btn io" id="${id}" type="button" aria-pressed="${on}" aria-label="${esc(label)}">${ico(icon)}<span class="tip">${esc(label)}</span></button>`;
   const actions = playable.map((o, i) => `<button class="f btn ${i === 0 ? 'lt' : ''}" data-play="${o.provider.id}" type="button">${ico('play', 's')}${playable.length > 1 ? esc(tr('Play on {name}', { name: o.provider.name })) : tr(resume ? 'Resume' : 'Play')}</button>`).join('');
-  const req = !playable.length && canReq && t.tmdbId ? `<button class="f btn pri" id="dq" type="button" ${requested && t.kind !== 'series' ? 'disabled' : ''}>${requested && t.kind !== 'series' ? `${ico('check', 's')}${esc(tr(requested.state))}` : tr(requested ? 'Request more seasons' : 'Request')}</button>` : '';
+  const req = !playable.length && !unsure && canReq && t.tmdbId ? `<button class="f btn pri" id="dq" type="button" ${requested && t.kind !== 'series' ? 'disabled' : ''}>${requested && t.kind !== 'series' ? `${ico('check', 's')}${esc(tr(requested.state))}` : tr(requested ? 'Request more seasons' : 'Request')}</button>` : '';
   // A series' episodes open as their own menu, from the provider that plays it, else TMDB's list.
   const withEpisodes = playable.find((o) => o.provider.seasons)?.provider ?? null;
   const eps = t.kind === 'series' && (withEpisodes || t.seasonList?.length) ? btn('de', 'list-video', tr('Episodes')) : '';
@@ -261,7 +264,7 @@ function fillPeople(sec: HTMLElement, heading: string, people: Person[], note = 
   const track = $('.ctrack', sec);
   $$('.pc', track).forEach((el, i) => {
     el.addEventListener('focus', () => {
-      const room = 1920 - 96 - 64, end = el.offsetLeft + el.offsetWidth;
+      const room = tvW() - 96 - 64, end = el.offsetLeft + el.offsetWidth;
       track.style.transform = `translateX(${-Math.max(0, end - room + 40)}px)`;
     });
     // OK on a person opens their page; a title picked there opens in place of this one.

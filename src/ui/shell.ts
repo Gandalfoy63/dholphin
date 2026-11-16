@@ -22,10 +22,16 @@ import { avatar, showLines } from './profiles';
 import { pageRequests } from './requests';
 import { setReturnContext } from './returning';
 import { artHtml, bindCards, cardHtml, heroHtml, loadRows, rowSkeleton, type Item } from './rows';
-import { bindKeyboard, keyboardHtml } from './textentry';
+import { pageLibrary } from './library';
+import { pageSearch } from './search';
+import { bindSections, keepSecond, sectionsHtml, SECTIONS } from './sections';
 
 export interface Route { id: string }
-const NAV: [string, string, string][] = [['search', 'search', 'Search'], ['home', 'house', 'Home'], ['series', 'tv', 'Series'], ['movies', 'clapperboard', 'Movies'], ['anime', 'sparkles', 'Anime'], ['tvshows', 'mic-vocal', 'TV Shows'], ['categories', 'layout-grid', 'Categories'], ['list', 'bookmark', 'My List'], ['history', 'history', 'History'], ['requests', 'inbox', 'Requests']];
+/**
+ * The sidebar: each page with its Lucide icon. Series, Movies, Anime and TV Shows are not in it: they open from
+ * Home's section tiles (sections.ts), and the sidebar marks Home while one is open.
+ */
+const NAV: [string, string, string][] = [['search', 'search', 'Search'], ['home', 'house', 'Home'], ['categories', 'shapes', 'Categories'], ['library', 'library-big', 'Library'], ['list', 'bookmark', 'My List'], ['history', 'history', 'History'], ['requests', 'inbox', 'Requests']];
 let route = 'home';
 let lastContent: HTMLElement | null = null;
 let backArmed = 0;
@@ -35,7 +41,9 @@ let restart: () => void = () => undefined;
 export function showShell(start = 'home', hooks: { profiles: () => void; onboarding: () => void }) {
   toProfiles = hooks.profiles;
   restart = hooks.onboarding;
-  route = start;
+  // In a browser, the page is in the address (#library): reloading stays on it.
+  const asked = app.host.id === 'browser' ? decodeURIComponent(location.hash.slice(1)) : '';
+  route = start === 'home' && knownRoute(asked) ? asked : start;
   const p = app.profile;
   // The profile loader, if up, stays on top until Home has something to show.
   [...TV().children].forEach((c) => c.classList.contains('pload') || c.remove());
@@ -45,7 +53,8 @@ export function showShell(start = 'home', hooks: { profiles: () => void; onboard
   // pages used to stop at the bottom of the screen. Pages built of rows move on their own.
   $('#ct', TV()).addEventListener('focusin', (e) => {
     const el = e.target as HTMLElement, pg = el.closest<HTMLElement>('.pg');
-    if (!pg || el.closest('.row, .modal')) return;
+    // The pointer focuses what it is over: the page stays put, as a website does (the wheel scrolls it).
+    if (!pg || el.closest('.row, .modal') || nav.pointer) return;
     let y = 0, n: HTMLElement | null = el;
     while (n && n !== pg) {
       y += n.offsetTop;
@@ -89,13 +98,25 @@ function onBack() {
     closeRail(true);
     return;
   }
-  if (route.startsWith('cat:')) return go2('categories');
-  if (route !== 'home') return go2('home');
-  openRail();
+  if (!goBack()) openRail();
+}
+/**
+ * One step back: Title Details closes, a category returns to Categories, any other page to Home. False on Home, where
+ * there is nowhere to go back to.
+ */
+function goBack(): boolean {
+  if ($('.dlayer', TV())) {
+    closeDetails();
+    return true;
+  }
+  if (route.startsWith('cat:')) go2('categories');
+  else if (route !== 'home') go2('home');
+  else return false;
+  return true;
 }
 function mark() {
   $$('.ni', TV()).forEach((b) => {
-    const on = b.dataset.go === route || (route.startsWith('cat:') && b.dataset.go === 'categories');
+    const on = b.dataset.go === route || (route.startsWith('cat:') && b.dataset.go === 'categories') || (SECTIONS.some((x) => x.id === route) && b.dataset.go === 'home');
     b.classList.toggle('cur', on);
     if (on) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
@@ -159,8 +180,12 @@ function TVReady(fn: () => void) {
   else fn();
 }
 
+/** A page the address may name: one of the menu's, a section, Settings, or a category. */
+const knownRoute = (r: string) => !!r && (NAV.some((n) => n[0] === r) || SECTIONS.some((x) => x.id === r) || r === 'settings' || r.startsWith('cat:'));
+
 export function go2(id: string) {
   route = id;
+  if (app.host.id === 'browser') history.replaceState(history.state, '', `#${encodeURIComponent(id)}`);
   closeRail(false);
   mark();
   const ct = $('#ct', TV());
@@ -188,10 +213,11 @@ async function render(first: boolean) {
   else if (route === 'anime') await rowsPage(ct, (x) => isAnime(x) && !app.catalog.isShow(x), false, 'all', animeRows, async () => (await Promise.all((['tv', 'movie'] as const).map((k) => app.catalog.discover(k, { with_genres: 16, with_original_language: 'ja', sort_by: 'popularity.desc' })))).flat(), { with_genres: 16, with_original_language: 'ja' });
   else if (route === 'categories') await pageCategories(ct, (id) => go2(`cat:${id}`));
   else if (route.startsWith('cat:')) await pageCategory(ct, route.slice(4));
-  else await ({ search: pageSearch, list: pageList, history: pageHistory, requests: pageRequests, settings: pageSettings } as Record<string, (c: HTMLElement) => Promise<void> | void>)[route]!(ct);
+  else if (route === 'library') await pageLibrary(ct, go2);
+  else await ({ search: (c: HTMLElement) => pageSearch(c, (id) => go2(`cat:${id}`)), list: pageList, history: pageHistory, requests: pageRequests, settings: pageSettings } as Record<string, (c: HTMLElement) => Promise<void> | void>)[route]!(ct);
   void open;
   // Other pages: the heading rises, then their items (results, list, history, providers) arrive one by one.
-  if (!['home', 'series', 'movies', 'anime', 'tvshows'].includes(route) && !route.startsWith('cat:') && route !== 'categories') {
+  if (!['home', 'series', 'movies', 'anime', 'tvshows'].includes(route) && !route.startsWith('cat:') && route !== 'categories' && route !== 'library') {
     const items = $$('.grid > *, .lst > *, .prov', ct);
     A($('h1', ct) ?? ct.firstElementChild, RISE, { duration: 380 });
     if (items.length) cascade(items, { delay: 80 });
@@ -209,9 +235,15 @@ async function rowsPage(ct: HTMLElement, filter: (t: Title) => boolean, first: b
   const more = () => (batches++ < 4 ? feed() : []);
   const every = source ? (page: number) => source(page).then((l) => l.filter(filter)) : (page: number) => Promise.all((kinds === 'all' ? (['movie', 'tv'] as const) : kinds === 'series' ? (['tv'] as const) : (['movie'] as const))
     .map((k) => app.catalog.discover(k, { sort_by: 'popularity.desc', 'vote_count.gte': 20, ...extra, page }))).then((l) => l.flat().filter(filter));
-  ct.innerHTML = `<div class="scroller"><section class="hero" aria-busy="true"></section>${defs.map(rowSkeleton).join('')}</div>`;
+  // Home: the section tiles are the second row (sections.ts), after whichever row shows first.
+  const home = route === 'home';
+  ct.innerHTML = `<div class="scroller"><section class="hero" aria-busy="true"></section>${defs.map((d, i) => rowSkeleton(d) + (home && i === 0 ? sectionsHtml() : '')).join('')}</div>`;
   const d = first ? 140 : 0;
   const scroller = $('.scroller', ct);
+  if (home) {
+    bindSections(scroller, go2);
+    keepSecond(scroller);
+  }
   // The hero is the best pick for this profile, and it won't appear again in a row below it.
   const heroPick = (async () => {
     await app.engine.refreshPool();
@@ -267,48 +299,6 @@ function showFailure(ct: HTMLElement, e: Error) {
   $('#rt', ct).onclick = () => void render(false);
   $('#tos', ct).onclick = () => go2('settings');
   go($('#rt', ct));
-}
-
-function pageSearch(ct: HTMLElement) {
-  let q = '', kind: 'all' | 'movie' | 'series' = 'all', timer = 0, seq = 0;
-  ct.innerHTML = `<div class="pg"><h1>${t('Search')}</h1><div class="srch"><div class="stack"><div class="nm" aria-live="polite"></div>${keyboardHtml(false)}<div class="btns" id="kf">${(['all', 'movie', 'series'] as const).map((k) => `<button class="f chip" type="button" data-k2="${k}" aria-pressed="${k === 'all'}">${t({ all: 'All', movie: 'Movies', series: 'Series' }[k])}</button>`).join('')}</div></div><div id="res" style="min-width:0"></div></div></div>`;
-  const res = $('#res', ct);
-  const draw = async () => {
-    const me = ++seq, nm = $('.nm', ct) as HTMLElement | null;
-    // Typed, then left Search before the pause ran out: nothing to draw into.
-    if (!nm) return;
-    nm.textContent = q;
-    if (!q.trim()) {
-      res.innerHTML = '<div class="empty"><b style="color:var(--text)">' + t('Try a title, a person or a genre') + '</b>' + t('Results appear as you type.') + '</div>';
-      return;
-    }
-    res.setAttribute('aria-busy', 'true');
-    try {
-      const raw = (await app.catalog.search(q)).filter((t) => kind === 'all' || t.kind === kind);
-      if (me !== seq) return;
-      const ranked = app.engine.searchOrder(q, raw);
-      const rest = raw.filter((t) => !ranked.includes(t));
-      const list = [...ranked, ...rest].slice(0, 9).map((title): Item => ({ title }));
-      res.innerHTML = list.length ? `<div class="grid" style="grid-template-columns:repeat(3,320px)">${list.map((i) => cardHtml(i)).join('')}</div>` : `<div class="empty"><b style="color:var(--text)">${esc(t('Nothing for "{q}"', { q }))}</b>${t('Check the spelling, or try a genre.')}</div>`;
-      bindCards(res, list, (it, el) => void openDetails(it.title, el));
-      cascade($$('.card', res), { from: 'pop', step: 45 });
-    } catch (e) {
-      res.innerHTML = `<div class="empty"><b style="color:var(--text)">${t("Search isn't working")}</b>${esc(t((e as Error).message))}</div>`;
-    }
-    res.removeAttribute('aria-busy');
-  };
-  bindKeyboard(ct, (k) => {
-    q = k === 'del' ? q.slice(0, -1) : (q + k).slice(0, 40);
-    $('.nm', ct).textContent = q;
-    clearTimeout(timer);
-    timer = window.setTimeout(() => void draw(), 250);
-  });
-  $$('[data-k2]', ct).forEach((c) => (c.onclick = () => {
-    kind = c.dataset.k2 as typeof kind;
-    $$('[data-k2]', ct).forEach((x) => x.setAttribute('aria-pressed', String(x === c)));
-    void draw();
-  }));
-  void draw();
 }
 
 async function pageList(ct: HTMLElement) {
@@ -373,16 +363,18 @@ async function pageHistory(ct: HTMLElement, kind: 'all' | 'movie' | 'series' = '
 async function pageSettings(ct: HTMLElement) {
   const rows = await Promise.all(app.providers.map(async (p) => ({ p, s: await p.status(app.profile) })));
   const pp = await loadPrefs();
-  ct.innerHTML = `<div class="pg" style="gap:20px"><h1>${t('Settings')}</h1><div class="stack">${rows.map(({ p, s }) => `<div class="prov"><span class="plogos">${p.logos.map(plogo).join('')}</span><div class="i"><b>${esc(p.name)}</b><span class="muted">${esc(t(p.onOff?.() ? s.detail ?? 'Off' : s.connected ? 'Connected' : s.detail ?? 'Not connected'))}</span></div><button class="f btn" type="button" data-p="${p.id}">${actionLabel(p, s.connected)}</button></div>`).join('')}<div class="prov"><span class="plogos">${ico('settings')}</span><div class="i"><b>${t('Film data keys')}</b><span class="muted">${esc(keySummary())}</span></div><button class="f btn" type="button" id="ks">${t('Change')}</button></div>${app.host.phoneForm ? `<div class="prov"><span class="plogos">${ico('settings')}</span><div class="i"><b>${t('Set up from your phone')}</b><span class="muted">${t('Keys, Jellyfin, Seerr and every profile, without starting setup again')}</span></div><button class="f btn" type="button" id="sph">${t('Show the code')}</button></div>` : ''}<div class="prov"><span class="plogos">${ico('globe')}</span><div class="i"><b>${t('Dholphin server')}</b><span class="muted">${esc(app.server ? (app.server.linked ? t('Linked to {origin}', { origin: app.server.origin }) : t('This app runs on your Dholphin server')) : t('Not linked: this device keeps its own data'))}</span></div><div class="btns">${app.server ? `<button class="f btn" type="button" id="srvp">${t('Server panel')}</button>${app.server.linked ? `<button class="f btn" type="button" id="srvu">${t('Unlink')}</button>` : ''}` : `<button class="f btn" type="button" id="srvl">${t('Link to a Dholphin server')}</button>`}</div></div><div class="prov"><span class="plogos">${ico('rotate-ccw')}</span><div class="i"><b>${t('Setup')}</b><span class="muted">${t('See the setup steps again')}</span></div><button class="f btn" type="button" id="ro">${t('Start again')}</button></div><div class="prov"><span class="plogos">${ico('globe')}</span><div class="i"><b>${t('Language')}</b><span class="muted">${t('For the interface, titles and summaries')}</span></div><div class="btns" id="lg">${LANGUAGES.map(([c, n]) => `<button class="f chip" type="button" data-l="${c}" aria-pressed="${c === app.profile.language}">${n}</button>`).join('')}</div></div><div class="prov"><span class="plogos">${ico('play')}</span><div class="i"><b>${t('Playback')}</b><span class="muted">${t('In the Jellyfin player')}</span></div><div class="btns" id="pb"><button class="f chip" type="button" data-pp="autoSkip" aria-pressed="${pp.autoSkip}">${t('Skip intros by themselves')}</button><button class="f chip" type="button" data-pp="autoNext" aria-pressed="${pp.autoNext}">${t('Play the next episode by itself')}</button></div></div></div><p class="muted" style="font-size:20px">Film data from TMDB and OMDb. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability from JustWatch, through TMDB. Dholphin ${__VERSION__}.</p></div>`;
+  ct.innerHTML = `<div class="pg" style="gap:20px"><h1>${t('Settings')}</h1><div class="stack">${rows.map(({ p, s }) => `<div class="prov"><span class="plogos">${p.logos.map(plogo).join('')}</span><div class="i"><b>${esc(p.name)}</b><span class="muted">${esc(t(p.onOff?.() ? s.detail ?? 'Off' : s.connected ? 'Connected' : s.detail ?? 'Not connected'))}</span></div><button class="f btn" type="button" data-p="${p.id}">${actionLabel(p, s.connected)}</button></div>`).join('')}<div class="prov" id="ixrow"><span class="plogos">${ico('library-big')}</span><div class="i"><b>${t('Title index')}</b><span class="muted" id="ixs">${t('Loading')}</span></div><div class="btns" id="ixu" role="group" aria-label="${t('Used for')}"><button class="f chip" type="button" data-ix="1">${t('Library and Search')}</button><button class="f chip" type="button" data-ix="0">${t('Library only')}</button></div><button class="f btn" type="button" id="ixr">${ico('rotate-ccw', 's')}${t('Update now')}</button></div><div class="prov"><span class="plogos">${ico('settings')}</span><div class="i"><b>${t('Film data keys')}</b><span class="muted">${esc(keySummary())}</span></div><button class="f btn" type="button" id="ks">${t('Change')}</button></div>${app.host.phoneForm ? `<div class="prov"><span class="plogos">${ico('settings')}</span><div class="i"><b>${t('Set up from your phone')}</b><span class="muted">${t('Keys, Jellyfin, Seerr and every profile, without starting setup again')}</span></div><button class="f btn" type="button" id="sph">${t('Show the code')}</button></div>` : ''}<div class="prov"><span class="plogos">${ico('globe')}</span><div class="i"><b>${t('Dholphin server')}</b><span class="muted">${esc(app.server ? (app.server.linked ? t('Linked to {origin}', { origin: app.server.origin }) : t('This app runs on your Dholphin server')) : t('Not linked: this device keeps its own data'))}</span></div><div class="btns">${app.server ? `<button class="f btn" type="button" id="srvp">${t('Server panel')}</button>${app.server.linked ? `<button class="f btn" type="button" id="srvu">${t('Unlink')}</button>` : ''}` : `<button class="f btn" type="button" id="srvl">${t('Link to a Dholphin server')}</button>`}</div></div><div class="prov"><span class="plogos">${ico('rotate-ccw')}</span><div class="i"><b>${t('Setup')}</b><span class="muted">${t('See the setup steps again')}</span></div><button class="f btn" type="button" id="ro">${t('Start again')}</button></div><div class="prov"><span class="plogos">${ico('globe')}</span><div class="i"><b>${t('Language')}</b><span class="muted">${t('For the interface, titles and summaries')}</span></div><div class="btns" id="lg">${LANGUAGES.map(([c, n]) => `<button class="f chip" type="button" data-l="${c}" aria-pressed="${c === app.profile.language}">${n}</button>`).join('')}</div></div><div class="prov"><span class="plogos">${ico('play')}</span><div class="i"><b>${t('Playback')}</b><span class="muted">${t('In the Jellyfin player')}</span></div><div class="btns" id="pb"><button class="f chip" type="button" data-pp="autoSkip" aria-pressed="${pp.autoSkip}">${t('Skip intros by themselves')}</button><button class="f chip" type="button" data-pp="autoNext" aria-pressed="${pp.autoNext}">${t('Play the next episode by itself')}</button></div></div></div><p class="muted" style="font-size:20px">Film data from TMDB and OMDb. This product uses the TMDB API but is not endorsed or certified by TMDB. Streaming availability from JustWatch, through TMDB. Dholphin ${__VERSION__}.</p></div>`;
   $$('[data-p]', ct).forEach((b) => (b.onclick = async () => {
     const p = app.provider(b.dataset.p!)!;
     const connected = rows.find((r) => r.p === p)!.s.connected;
     if (connected) {
       await p.disconnect?.(app.profile);
+      void app.index.refresh(); // Its catalogue goes from the device.
       toast(t(p.onOff?.() ? 'Turned off {name}' : 'Disconnected {name}', { name: p.name }));
       await pageSettings(ct);
       go(focusables(ct)[0]);
     } else await connectProvider(p, app.profile, async () => {
+      void app.index.refresh(); // A service just connected: its catalogue is read now, in the background.
       await pageSettings(ct);
       go(focusables(ct)[0]);
     });
@@ -394,6 +386,34 @@ async function pageSettings(ct: HTMLElement) {
     await savePrefs(pp);
   }));
   $('#ks', ct).onclick = () => editKeys(ct);
+  // The title index (Library and Search): each service's count and age, or how far a read has got; Update now reads all again.
+  const ago = (at: number) => {
+    const m = Math.round((Date.now() - at) / 60_000);
+    return m < 1 ? t('just now') : m < 60 ? t('{n} min ago', { n: m }) : t('{n} h ago', { n: Math.round(m / 60) });
+  };
+  const showIndex = async () => {
+    const el = $('#ixs', ct);
+    if (!el) return;
+    const all = await app.index.statuses();
+    el.textContent = all.length ? all.map((x) => x.state === 'running' ? t('{name}: reading, {n}%', { name: x.name, n: x.of ? Math.min(99, Math.round((x.pages / x.of) * 100)) : 0 })
+      : x.state === 'error' ? t('{name}: failed ({why})', { name: x.name, why: t(x.error ?? '') })
+      : x.at ? t('{name}: {n} titles, {when}', { name: x.name, n: x.count.toLocaleString(), when: ago(x.at) }) : t('{name}: not read yet', { name: x.name })).join(' · ')
+      : t('Connect a service: its catalogue is kept here for the Library and Search');
+    $<HTMLButtonElement>('#ixr', ct).disabled = !all.length || all.some((x) => x.state === 'running');
+  };
+  void showIndex();
+  const stopIndex = app.index.onChange(() => (ct.contains($('#ixs', ct)) ? void showIndex() : stopIndex()));
+  $('#ixr', ct).onclick = () => void app.index.refresh(true);
+  // What the index serves: the Library and Search, or the Library only.
+  const showUse = async () => {
+    const on = await app.index.forSearch();
+    $$('[data-ix]', ct).forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.ix === '1') === on)));
+  };
+  void showUse();
+  $$('[data-ix]', ct).forEach((b) => (b.onclick = async () => {
+    await app.index.setForSearch(b.dataset.ix === '1');
+    await showUse();
+  }));
   // The server: link this TV, or its panel (opened here in a browser, shown as a code on a TV), or unlink.
   $('#srvl', ct)?.addEventListener('click', () => linkServer());
   $('#srvu', ct)?.addEventListener('click', () => {

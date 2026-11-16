@@ -89,15 +89,27 @@ export function toast(message: string) {
   setTimeout(() => e.remove(), 3200);
 }
 
+/** The widest the canvas grows, for a wide window (21:9). */
+const MAX_W = 2560;
+/**
+ * Fits the 1080-high canvas to the window. A TV is 16:9, so 1920 wide. A computer's browser window is often wider
+ * (a laptop with its toolbars): the canvas then widens to fill it, instead of black bars at the sides. A taller one
+ * keeps 1920 and centres it.
+ */
 export function fitTv() {
   const fit = () => {
-    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    const w = Math.round(Math.min(MAX_W, Math.max(1920, (1080 * innerWidth) / innerHeight)));
+    const s = Math.min(innerWidth / w, innerHeight / 1080);
+    TV().style.width = `${w}px`;
+    TV().style.setProperty('--tvw', `${w}px`);
     TV().style.transform = `translate(-50%, -50%) scale(${s})`;
   };
   addEventListener('resize', fit);
   fit();
 }
-export const tvScale = () => TV().getBoundingClientRect().width / 1920;
+/** The canvas's width: 1920 on a TV, up to 2560 in a wide browser window. */
+export const tvW = () => TV().offsetWidth || 1920;
+export const tvScale = () => TV().getBoundingClientRect().height / 1080;
 
 /** The Dholphin mark and wordmark, with its start animation. */
 const D = 'M40 32H120A96 96 0 0 1 120 224H40Z';

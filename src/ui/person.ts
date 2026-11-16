@@ -3,8 +3,8 @@
 import type { PersonPage } from '@/core/catalog';
 import type { Rating } from '@/core/library';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, leave, TV, toast, RISE } from './dom';
-import { go } from './focus';
+import { A, $, $$, cascade, esc, ico, leave, tvW, TV, toast, RISE } from './dom';
+import { go, nav } from './focus';
 import { getLocale, t as tr } from './i18n';
 import { bindCards, cardHtml, type Item } from './rows';
 
@@ -39,6 +39,7 @@ export async function openPerson(ref: { id?: number; name: string }, opener: HTM
   (window as unknown as { _mret?: () => void })._mret = shut;
   // The page moves with focus: the top for the buttons, a section's heading near the top for the rest.
   m.addEventListener('focusin', (e) => {
+    if (nav.pointer) return; // The pointer doesn't move the page; the wheel does.
     const sec = (e.target as HTMLElement).closest<HTMLElement>('section');
     const most = Math.max(0, scroll.scrollHeight - 1080);
     scroll.style.transform = `translateY(${-(sec ? Math.min(most, Math.max(0, sec.offsetTop - 96)) : 0)}px)`;
@@ -92,7 +93,7 @@ export async function openPerson(ref: { id?: number; name: string }, opener: HTM
       open(it, el);
     });
     $$('.card', track).forEach((el) => el.addEventListener('focus', () => {
-      const room = 1920 - 96 - 64, end = el.offsetLeft + el.offsetWidth;
+      const room = tvW() - 96 - 64, end = el.offsetLeft + el.offsetWidth;
       track.style.transform = `translateX(${-Math.max(0, end - room + 40)}px)`;
     }));
   }
@@ -100,7 +101,7 @@ export async function openPerson(ref: { id?: number; name: string }, opener: HTM
     secs.insertAdjacentHTML('beforeend', `<section class="ppl-photos"><h2>${tr('Photos')}</h2><div class="cclip"><div class="ctrack ppl-ptrack" role="list">${p.photos.map((src, i) => `<div class="f ppl-pic" tabindex="0" role="listitem" aria-label="${esc(tr('Photo {n} of {name}', { n: i + 1, name: p.name }))}"><img src="${esc(src)}" alt="" loading="lazy"></div>`).join('')}</div></div><p class="ccred">${tr('Photos and biography from TMDB')}</p></section>`);
     const track = $('.ppl-ptrack', secs);
     $$('.ppl-pic', track).forEach((el) => el.addEventListener('focus', () => {
-      const room = 1920 - 96 - 64, end = el.offsetLeft + el.offsetWidth;
+      const room = tvW() - 96 - 64, end = el.offsetLeft + el.offsetWidth;
       track.style.transform = `translateX(${-Math.max(0, end - room + 40)}px)`;
     }));
     $$<HTMLImageElement>('.ppl-pic img', track).forEach((img) => img.addEventListener('error', () => img.closest('.ppl-pic')?.remove()));

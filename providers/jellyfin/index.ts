@@ -1,7 +1,7 @@
 // Docs: docs/06 - API/Jellyfin and Seerr Provider.md
 // Purpose: your Jellyfin server, with Seerr for asking for what it doesn't have.
 import { toEntry, type SeerrRequest } from './requests';
-import type { Availability, Chapter, Episode, InternalSession, PlaySession, PlayTarget, Profile, Provider, ProviderContext, Season, Segment, StreamChoice, StreamTrack, Title, Trickplay, VideoSource } from '@/sdk/types';
+import type { Availability, Chapter, LibraryEntry, LibraryGroup, Episode, InternalSession, PlaySession, PlayTarget, Profile, Provider, ProviderContext, Season, Segment, StreamChoice, StreamTrack, Title, Trickplay, VideoSource } from '@/sdk/types';
 import { key as nameKey } from '@/core/dubbing';
 import { newId } from '@/core/id';
 import { Jellyfin, normalizeServer, TICKS, type Item, type MediaSource, type MediaStream } from './api';
@@ -27,13 +27,25 @@ export function itemToTitle(item: Item & { ProviderIds?: Record<string, string> 
   };
 }
 
-/** What the server has, by profile: by title key, by IMDb ID, and by kind and name (without accents or case). */
-interface Index { byKey: Map<string, Item>; byImdb: Map<string, Item>; byName: Map<string, Item[]> }
-type FullItem = Item & { ProviderIds?: Record<string, string>; OriginalTitle?: string };
+/**
+ * What the server has, by profile: by title key, by IMDb ID, and by kind and name (without accents or case), for
+ * matching titles; `all` keeps every item, home videos too, for the Library and search.
+ */
+interface Index { byKey: Map<string, Item>; byImdb: Map<string, Item>; byName: Map<string, Item[]>; all: FullItem[] }
+type FullItem = Item & { ProviderIds?: Record<string, string>; OriginalTitle?: string; DateCreated?: string };
+/** What the Library groups as films and series; anything else (home videos) is `other`, never matched to a film. */
+const groupOf = (i: Item): LibraryGroup => (i.Type === 'Series' ? 'series' : i.Type === 'Movie' ? 'movie' : 'other');
+/** Items asked for at once while reading the whole library, and how long each page may take. */
+const PAGE = 1000, PAGE_MS = 60_000;
 
 export function buildIndex(items: FullItem[]): Index {
-  const ix: Index = { byKey: new Map(), byImdb: new Map(), byName: new Map() };
+  const ix: Index = { byKey: new Map(), byImdb: new Map(), byName: new Map(), all: items };
   for (const i of items) {
+    // A home video plays from its own card, by the server's ID; it never stands for a film of the same name.
+    if (groupOf(i) === 'other') {
+      ix.byKey.set(`jellyfin:${i.Id}`, i);
+      continue;
+    }
     const t = itemToTitle(i, () => null);
     ix.byKey.set(t.key, i);
     ix.byKey.set(`jellyfin:${i.Id}`, i);
@@ -59,10 +71,38 @@ export function findItem(ix: Index | undefined, t: Pick<Title, 'key' | 'imdbId' 
   return same.find((i) => !t.year || !i.ProductionYear || Math.abs(i.ProductionYear - t.year) <= 1);
 }
 
+/** Edits from `a` to `b` (insert, delete, change, swap two letters), or `max + 1` once past `max`. */
+export function edits(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev2: number[] = [], prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const row = [i];
+    for (let j = 1; j <= b.length; j++) {
+      let v = Math.min(prev[j]! + 1, row[j - 1]! + 1, prev[j - 1]! + (a[i - 1] === b[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) v = Math.min(v, prev2[j - 2]! + 1);
+      row.push(v);
+    }
+    if (Math.min(...row) > max) return max + 1;
+    [prev2, prev] = [prev, row];
+  }
+  return prev[b.length]!;
+}
+/** A typed word against a word of a name: its start, or near it, as the core allows (none under 4 letters, 1, 2 from 8). */
+export function wordNear(typed: string, word: string): boolean {
+  if (word.startsWith(typed)) return true;
+  const max = typed.length < 4 ? 0 : typed.length < 8 ? 1 : 2;
+  return max > 0 && (edits(typed, word, max) <= max || edits(typed, word.slice(0, typed.length), max) <= max);
+}
+/** A name's words, without accents or case: "Le Voyage de Chihiro" is le, voyage, de, chihiro. */
+export const nameWords = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+
 export function jellyfin(ctx: ProviderContext): Provider {
   const clients = new Map<string, Jellyfin>();
   const index = new Map<string, Index>(); // By profile.
   const find = (p: Profile, t: Pick<Title, 'key' | 'imdbId' | 'kind' | 'name' | 'year'>) => findItem(index.get(p.id), t);
+  /** The library being read, per profile, so callers wait for the same read; and when a failed read may be tried again. */
+  const loading = new Map<string, Promise<void>>();
+  const failedAt = new Map<string, number>();
 
   async function client(p: Profile): Promise<Jellyfin | null> {
     const hit = clients.get(p.id);
@@ -251,14 +291,39 @@ export function jellyfin(ctx: ProviderContext): Provider {
       index.delete(p.id);
       await ctx.del(`link:${p.id}`);
     },
-    async refresh(p) {
-      const c = await client(p);
-      if (!c) return;
-      const r = await c.get<{ Items: FullItem[] }>('/Items', { userId: c.userId, includeItemTypes: ['Movie', 'Series'], recursive: true, fields: ['ProviderIds', 'Overview', 'Genres', 'OriginalTitle'], limit: 10000 });
-      index.set(p.id, buildIndex(r.Items));
+    /**
+     * Reads the whole library, by pages. It used to be one request of up to 10,000 items, given 15 seconds: a big
+     * library through the server's relay took longer, the read failed and was never tried again, and everything
+     * read "Not on your services" until the app restarted.
+     */
+    refresh(p) {
+      const running = loading.get(p.id);
+      if (running) return running;
+      const run = (async () => {
+        const c = await client(p);
+        if (!c) return;
+        const all: FullItem[] = [];
+        for (let start = 0; ; start += PAGE) {
+          const r = await c.get<{ Items: FullItem[]; TotalRecordCount?: number }>('/Items', { userId: c.userId, includeItemTypes: ['Movie', 'Series', 'Video'], recursive: true, fields: ['ProviderIds', 'Overview', 'Genres', 'OriginalTitle', 'DateCreated'], enableImageTypes: ['Primary', 'Backdrop'], imageTypeLimit: 1, startIndex: start, limit: PAGE }, PAGE_MS);
+          all.push(...r.Items);
+          if (r.Items.length < PAGE || (r.TotalRecordCount !== undefined && all.length >= r.TotalRecordCount)) break;
+        }
+        index.set(p.id, buildIndex(all));
+        failedAt.delete(p.id);
+      })().catch((e: Error) => {
+        failedAt.set(p.id, Date.now());
+        ctx.log('library read failed', e.message);
+        throw e;
+      }).finally(() => loading.delete(p.id));
+      loading.set(p.id, run);
+      return run;
     },
     async availability(titles, p) {
       const out = new Map<string, Availability>();
+      // Not read yet, or the last read failed over half a minute ago: read it now rather than answer "not here".
+      if (!index.has(p.id) && Date.now() - (failedAt.get(p.id) ?? 0) > 30_000) await provider.refresh!(p).catch(() => undefined);
+      // Still unknown: say so, rather than "not here" or a request for what may well be on the server.
+      if (!index.has(p.id) && (await client(p))) throw new Error('Jellyfin did not answer');
       const canRequest = !!(await ctx.get('seerrUrl'));
       for (const t of titles) {
         if (find(p, t)) out.set(t.key, 'playable');
@@ -271,6 +336,25 @@ export function jellyfin(ctx: ProviderContext): Provider {
       if (!c) return [];
       const latest = await c.get<(Item & { ProviderIds?: Record<string, string> })[]>('/Items/Latest', { userId: c.userId, limit: 20, fields: ['ProviderIds', 'Overview', 'Genres'], includeItemTypes: ['Movie', 'Series'] });
       return [{ heading: 'Jellyfin', titles: latest.map((i) => itemToTitle(i, imageOf(c))) }];
+    },
+    async search(query, p) {
+      const c = await client(p);
+      if (!c) return [];
+      if (!index.has(p.id)) await provider.refresh!(p).catch(() => undefined);
+      const words = nameWords(query);
+      if (!words.length) return [];
+      // Each word typed starts a word of the name, or nearly (a typo); the core then orders them.
+      const hit = (i: FullItem) => [i.Name, i.OriginalTitle].some((n) => {
+        const ws = nameWords(n ?? '');
+        return words.every((w) => ws.some((x) => wordNear(w, x)));
+      });
+      return (index.get(p.id)?.all ?? []).filter(hit).slice(0, 40).map((i) => itemToTitle(i, imageOf(c)));
+    },
+    async library(p) {
+      const c = await client(p);
+      if (!c) return [];
+      if (!index.has(p.id)) await provider.refresh!(p);
+      return (index.get(p.id)?.all ?? []).map((i): LibraryEntry => ({ title: itemToTitle(i, imageOf(c)), group: groupOf(i), added: i.DateCreated ?? null }));
     },
     async seasons(t, p) {
       const c = await client(p);

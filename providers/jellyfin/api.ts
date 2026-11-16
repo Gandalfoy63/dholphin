@@ -135,7 +135,7 @@ export class Jellyfin {
     }
   }
 
-  get = <T>(path: string, params: Query = {}) => this.call<T>('GET', path + query(params));
+  get = <T>(path: string, params: Query = {}, timeoutMs?: number) => this.call<T>('GET', path + query(params), undefined, timeoutMs);
   post = <T>(path: string, body?: unknown, params: Query = {}) => this.call<T>('POST', path + query(params), body ?? {});
 
   // ---- server and sign-in ----

@@ -60,11 +60,26 @@ export async function cached<T>(store: Store, key: string, maxAgeMs: number, loa
 export const HOUSEHOLD = /^(profiles|setupDone|keys)$|^(prov|p):/;
 
 /**
+ * Moves an address under `from` (the server's address as it sees itself) under `to` (the one this app reached it at),
+ * in a string, an array or an object. Behind a proxy the server can only guess its address, from headers the proxy
+ * may not send (nginx, by default, passes its own name for the server as Host, and no X-Forwarded-*); the app knows
+ * the one that works. Docs: Server (behind a proxy).
+ */
+export function rebaseServer<T>(v: T, from: string, to: string): T {
+  if (!from || !to || from === to) return v;
+  if (typeof v === 'string') return (v === from || v.startsWith(`${from}/`) ? to + v.slice(from.length) : v) as T;
+  if (Array.isArray(v)) return v.map((x) => rebaseServer(x, from, to)) as T;
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, rebaseServer(x, from, to)])) as T;
+  return v;
+}
+
+/**
  * The household's data on a Dholphin server. Everything is read once at start (`load`) and kept in memory, with a copy
  * on the device so it still opens when the server can't be reached; a change is sent at once, and sent again later
  * if the server didn't take it. Docs: Server (store API).
  */
-export async function serverStore(base: string, local: Store, fetcher: typeof fetch = fetch): Promise<Store & { pending(): number }> {
+// `fix` corrects what the server gives: its relay addresses for Jellyfin and Seerr (rebaseServer).
+export async function serverStore(base: string, local: Store, fetcher: typeof fetch = fetch, fix: (v: unknown) => unknown = (v) => v): Promise<Store & { pending(): number }> {
   const mem = new Map<string, unknown>();
   const copy = 'server:'; // The device's copy, in the local store.
   try {
@@ -89,7 +104,7 @@ export async function serverStore(base: string, local: Store, fetcher: typeof fe
   };
   setInterval(() => queue.forEach((_, k) => void send(k)), 20_000);
   return {
-    get: async <T>(k: string) => mem.get(k) as T | undefined,
+    get: async <T>(k: string) => fix(mem.get(k)) as T | undefined,
     set: async (k, v) => {
       mem.set(k, v);
       await local.set(copy + k, v);

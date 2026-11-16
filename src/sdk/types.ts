@@ -57,6 +57,9 @@ export interface PlayTarget { title: Title; episode?: Episode; startSec?: number
 /** `shared`: the same for every profile (a server's address), as opposed to each profile's own account. */
 export interface ProviderField { key: string; label: string; secret?: boolean; placeholder?: string; optional?: boolean; shared?: boolean }
 export interface ProviderRow { heading: string; titles: Title[] }
+/** `other`: what is neither a film nor a series, such as home videos. */
+export type LibraryGroup = 'series' | 'movie' | 'other';
+export interface LibraryEntry { title: Title; group: LibraryGroup; added?: string | null }
 
 export interface ProviderContext {
   fetch: typeof fetch;
@@ -95,6 +98,13 @@ export interface Provider {
   refresh?(profile: Profile): Promise<void>;
   availability?(titles: Title[], profile: Profile): Promise<Map<string, Availability>>;
   rows?(profile: Profile): Promise<ProviderRow[]>;
+  /** Titles of the service matching a search, so what only it has (a home video) is found too. */
+  search?(query: string, profile: Profile): Promise<Title[]>;
+  /**
+   * Everything the service has for this profile, for the Library page, in groups. A service known through TMDB's
+   * watch providers (`watchProviderId`) needs none: the Library lists it from TMDB.
+   */
+  library?(profile: Profile): Promise<LibraryEntry[]>;
   seasons?(title: Title, profile: Profile): Promise<Season[]>;
   episodes?(title: Title, season: Season, profile: Profile): Promise<Episode[]>;
   play?(target: PlayTarget, profile: Profile): Promise<PlaySession>;
@@ -137,6 +147,8 @@ export interface Host {
   leavesPage: boolean;
   /** Leaves the page for a service's own site, or on Android hands the address to the service's own app (`app`). */
   openExternal(url: string, intent: 'login' | 'play', meta?: unknown, app?: AppTarget): Promise<void>;
+  /** A browser: whether this address opens in a new tab (another site, as netflix.com), the page staying as it is. */
+  newTab?(url: string): boolean;
   /** Android: whether one of these apps is installed. */
   hasApp?(packages: string[]): Promise<boolean>;
   /** Typing on a phone: the TV serves a one-time form on the home network, shown as a QR code. */
