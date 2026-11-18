@@ -84,9 +84,12 @@ class MainActivity : ComponentActivity() {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
             WindowCompat.enableEdgeToEdge(window)
             val frame = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#0E0E10")); addView(web) }
+            // The keyboard too: edge to edge, nothing resizes the page for it, so the padding at the bottom grows to its
+            // height and the page (a field, a sheet) stays above it. Docs: Android/Software Keyboard.
             ViewCompat.setOnApplyWindowInsetsListener(frame) { v, insets ->
                 val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                val keyboard = insets.getInsets(WindowInsetsCompat.Type.ime())
+                v.setPadding(bars.left, bars.top, bars.right, maxOf(bars.bottom, keyboard.bottom))
                 WindowInsetsCompat.CONSUMED
             }
             setContentView(frame)

@@ -346,6 +346,59 @@ await until(p, () => !document.querySelector('.acm'));
 await p.reload();
 await until(p, () => document.querySelector('.ni[data-go="home"]'));
 
+// Linking to a server behind a reverse proxy, by a domain: with a code, or with the household password. The keyboard
+// (the screen made shorter) never hides the field being typed in.
+console.log('Linking to a server');
+{
+  const asked = [];
+  // A stand-in server at a domain, answering over https only, as behind a proxy. It refuses: the messages are checked.
+  await p.route(/^https?:\/\/tv\.example\.test\//, (r) => {
+    const req = r.request(), u = new URL(req.url());
+    asked.push({ url: req.url(), body: req.postData() });
+    const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Allow-Methods': 'GET, POST' };
+    if (u.protocol === 'http:') return r.abort('connectionrefused');
+    if (req.method() === 'OPTIONS') return r.fulfill({ status: 204, headers: cors });
+    if (u.pathname === '/api/status') return r.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ app: 'dholphin', version: '0.42.0+78' }) });
+    if (u.pathname === '/api/pair') return r.fulfill({ status: 403, headers: cors, contentType: 'application/json', body: JSON.stringify({ message: 'Wrong or expired code. Make a new one in the panel.' }) });
+    if (u.pathname === '/api/login') return r.fulfill({ status: 401, headers: cors, contentType: 'application/json', body: JSON.stringify({ message: 'Wrong password' }) });
+    return r.fulfill({ status: 404, headers: cors, body: '' });
+  });
+  await page(p, 'settings');
+  await until(p, () => document.querySelector('#srvl'));
+  await tap(p, '#srvl');
+  await until(p, () => document.querySelector('.lsrv [data-mode]'));
+  await p.waitForTimeout(300);
+  const shown = (id) => p.evaluate((x) => !!document.querySelector(`#fld-${x}`)?.closest('.field')?.getBoundingClientRect().height, id);
+  check('Linking offers a code or the household password, the code first', (await p.locator('.lsrv [data-mode]').count()) === 2 && (await shown('code')) && !(await shown('password')));
+  await p.fill('#fld-origin', 'tv.example.test');
+  await p.fill('#fld-code', '123 456');
+  await tap(p, '#lgo');
+  await until(p, () => document.querySelector('.lsrv .err')?.textContent);
+  check('A domain is tried over https first, the code sent to its /api/pair', asked[0]?.url === 'https://tv.example.test/api/status' && asked.some((a) => a.url === 'https://tv.example.test/api/pair' && JSON.parse(a.body).code === '123456') && !asked.some((a) => a.url.startsWith('http:')), JSON.stringify(asked));
+  check('A refused code says why', (await p.locator('.lsrv .err').textContent()).includes('expired'));
+  await tap(p, '.lsrv [data-mode="password"]');
+  check('The password way shows only the password field', (await shown('password')) && !(await shown('code')) && (await p.locator('#fld-password').getAttribute('type')) === 'password');
+  await p.fill('#fld-password', 'not-it');
+  await tap(p, '#lgo');
+  await until(p, () => document.querySelector('.lsrv .err')?.textContent.includes('Wrong password'));
+  const login = asked.find((a) => a.url.endsWith('/api/login'));
+  check('The password goes to /api/login asking for a device\'s token, under the phone\'s name', !!login && JSON.parse(login.body).device === true && JSON.parse(login.body).name === 'Phone' && JSON.parse(login.body).password === 'not-it', JSON.stringify(login));
+  await shot(p, '17-phone-link');
+  await fits(p, 'Linking to a server');
+  // The keyboard opens: the screen is shorter. The field stays in view, and the menu stays a bar.
+  await p.locator('#fld-password').focus();
+  await p.setViewportSize({ width: 390, height: 430 });
+  await p.waitForTimeout(500);
+  const kb = await p.evaluate(() => { const r = document.querySelector('#fld-password').getBoundingClientRect(); return { top: Math.round(r.top), bottom: Math.round(r.bottom), h: innerHeight, nav: document.querySelector('#tv').dataset.nav }; });
+  await shot(p, '18-phone-link-keyboard');
+  check('With the keyboard open, the field being typed in stays above it', kb.top >= 0 && kb.bottom <= kb.h && kb.nav === 'bar', JSON.stringify(kb));
+  await p.setViewportSize({ width: 390, height: 844 });
+  await p.waitForTimeout(300);
+  await tap(p, '#lcn');
+  await until(p, () => !document.querySelector('.lsrv'));
+  await p.unroute(/^https?:\/\/tv\.example\.test\//);
+}
+
 console.log('Phone, sideways');
 await p.setViewportSize({ width: 844, height: 390 });
 await p.waitForTimeout(500);

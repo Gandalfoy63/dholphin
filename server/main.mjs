@@ -231,6 +231,12 @@ async function handle(req, res) {
     const b = await readBody(req, 10_000);
     if (!loginLimit(ipOf(req))) return json(429, { message: 'Too many tries. Wait a few minutes.' });
     if (!(await checkPassword(b.password, state.settings.data.password))) return json(401, { message: 'Wrong password' });
+    // An app linking itself with the household password, rather than a code from the panel: it gets a device's token,
+    // as /api/pair gives, and no cookie (it calls from another origin, the token in a header).
+    if (b.device === true) {
+      const { token } = newDevice(state, b.name ?? 'Device', 'device');
+      return json(200, { token, server: { version: VERSION, origin: publicBase(req) } });
+    }
     const { token } = newDevice(state, b.name ?? 'Browser', 'browser');
     return json(200, { ok: true }, { 'Set-Cookie': sessionCookie(req, token) });
   }

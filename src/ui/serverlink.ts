@@ -1,36 +1,65 @@
 // Docs: docs/04 - Architecture/Server.md
-// Purpose: a TV and a Dholphin server: linking with a code, the panel's address as a QR code, and waiting for the first profile.
+// Purpose: a device and a Dholphin server: linking with a code or the household password, the panel's address as a QR code, and waiting for the first profile.
 import type { ServerLink } from './app';
 import { app } from './app';
-import { A, $, esc, ico, touch, TV, toast } from './dom';
+import { A, $, $$, esc, formOf, ico, touch, TV, toast } from './dom';
 import { go } from './focus';
 import { t } from './i18n';
+import { candidateOrigins } from '@/core/origin';
 import { bindPhone, phoneHtml } from './phone';
 import { bindFields, fieldsHtml, keyboardHtml } from './textentry';
 
 /** Kept on this device only (not the household's): its link to a server. */
 const LINK_KEY = 'serverLink';
 
-/** The address as typed: a scheme added when missing, a path kept (a server under a proxy's path), no trailing slash. */
-export function normalizeOrigin(raw: string): string | null {
-  const s = raw.trim().replace(/\/+$/, '');
-  if (!s) return null;
-  try {
-    const u = new URL(/^https?:\/\//i.test(s) ? s : `http://${s}`);
-    return (u.origin + u.pathname).replace(/\/+$/, '');
-  } catch {
-    return null;
+export { candidateOrigins, normalizeOrigin } from '@/core/origin';
+
+/** The first of these that is a Dholphin server, by its status: a few seconds each. */
+async function reachServer(origins: string[]): Promise<string | null> {
+  for (const o of origins) {
+    const ok = await fetch(`${o}/api/status`, { signal: AbortSignal.timeout(6000) }).then((r) => r.json()).then((j: { app?: string }) => j.app === 'dholphin', () => false);
+    if (ok) return o;
   }
+  return null;
 }
 
-/** Links this TV: the address and the six-digit code from the server's panel. The app starts again, on the server. */
+/** How this device calls itself in the server's list of devices. */
+const deviceName = () => {
+  const kind = formOf() === 'tablet' ? 'tablet' : formOf() === 'phone' ? 'phone' : 'TV';
+  return app.host.id === 'android' ? `Android ${kind}` : app.host.id === 'cooldash' ? 'CoolDash TV' : kind === 'TV' ? 'TV' : kind === 'phone' ? 'Phone' : 'Tablet';
+};
+
+/**
+ * Links this device to a server: its address (on the home network, or a domain behind a reverse proxy), then a code
+ * from the panel or the household password. The app starts again, on the server.
+ */
 export function linkServer(after?: () => void, origin = '') {
   const ret = document.activeElement as HTMLElement | null;
-  TV().insertAdjacentHTML('beforeend', `<div class="modal"><div class="panel" style="justify-items:start;gap:16px"><h2 style="font-size:36px">${t('Link to a Dholphin server')}</h2><p class="muted" style="max-width:900px">${t('The server keeps the keys, the profiles and their history for every device. In its panel, choose Link a TV: it shows its address and a code.')}</p><div class="${app.host.phoneForm ? 'withphone' : ''}"><div class="stack">${fieldsHtml([{ key: 'origin', label: 'Server address', placeholder: '192.168.1.20:8080', value: origin }, { key: 'code', label: 'Code' }])}${keyboardHtml()}</div>${phoneHtml()}</div><div class="err" role="alert"></div><div class="btns"><button class="f btn pri" id="lgo" type="button">${t('Link')}</button><button class="f btn" id="lcn" type="button">${t('Cancel')}</button></div></div></div>`);
+  let mode: 'code' | 'password' = 'code';
+  TV().insertAdjacentHTML('beforeend', `<div class="modal lsrv"><div class="panel" style="justify-items:start;gap:16px"><h2 style="font-size:36px">${t('Link to a Dholphin server')}</h2><p class="muted" style="max-width:900px">${t('The server keeps the keys, the profiles and their history for every device. Its address can be on your home network, or a domain behind a reverse proxy.')}</p><div class="btns" role="radiogroup" aria-label="${t('Link with')}"><button class="f chip" type="button" role="radio" data-mode="code" aria-checked="true" aria-pressed="true">${t('Link code')}</button><button class="f chip" type="button" role="radio" data-mode="password" aria-checked="false" aria-pressed="false">${t('Household password')}</button></div><div class="${app.host.phoneForm ? 'withphone' : ''}"><div class="stack">${fieldsHtml([{ key: 'origin', label: 'Server address', placeholder: 'tv.example.com, 192.168.1.20:8080', value: origin }, { key: 'code', label: 'Code' }, { key: 'password', label: 'Password', secret: true }])}<p class="muted lhint"></p>${keyboardHtml()}</div>${phoneHtml()}</div><div class="err" role="alert"></div><div class="btns"><button class="f btn pri" id="lgo" type="button">${t('Link')}</button><button class="f btn" id="lcn" type="button">${t('Cancel')}</button></div></div></div>`);
   const m = $('.modal:last-child', TV());
   A($('.panel', m), [{ opacity: 0, transform: 'scale(.96)' }, { opacity: 1, transform: 'none' }], { duration: 240 });
   const read = bindFields(m);
-  const stopPhone = bindPhone(m, t('Link to a Dholphin server'), [{ key: 'origin', label: t('Server address') }, { key: 'code', label: t('Code') }], () => $('#lgo', m).click());
+  const field = (k: string) => $(`#fld-${k}`, m).closest<HTMLElement>('.field')!;
+  /** A code from the panel, or the household password: only that field shows. */
+  const setMode = (to: typeof mode) => {
+    mode = to;
+    $$('[data-mode]', m).forEach((b) => {
+      b.setAttribute('aria-checked', String(b.dataset.mode === to));
+      b.setAttribute('aria-pressed', String(b.dataset.mode === to));
+    });
+    field('code').hidden = to !== 'code';
+    field('password').hidden = to !== 'password';
+    $('.lhint', m).textContent = t(to === 'code' ? 'In the server panel, choose Link a TV: it shows a six-digit code, good for ten minutes.' : 'The password you sign in to the server panel with.');
+    $('.err', m).textContent = '';
+  };
+  setMode('code');
+  $$('[data-mode]', m).forEach((b) => (b.onclick = () => setMode(b.dataset.mode as typeof mode)));
+  // From a phone (Android TV's QR code): the address, and a code or the password, whichever was filled.
+  const stopPhone = bindPhone(m, t('Link to a Dholphin server'), [{ key: 'origin', label: t('Server address') }, { key: 'code', label: t('Code') }, { key: 'password', label: t('Household password'), secret: true }], () => {
+    if (($<HTMLInputElement>('#fld-password', m).value ?? '') && !$<HTMLInputElement>('#fld-code', m).value) setMode('password');
+    $('#lgo', m).click();
+  });
   const shut = () => {
     void stopPhone.then((s) => s());
     m.remove();
@@ -41,19 +70,25 @@ export function linkServer(after?: () => void, origin = '') {
   (window as unknown as { _mret?: () => void })._mret = shut;
   $('#lcn', m).onclick = shut;
   $('#lgo', m).onclick = async () => {
-    const v = read(), origin = normalizeOrigin(v.origin ?? ''), b = $<HTMLButtonElement>('#lgo', m);
-    if (!origin) return void ($('.err', m).textContent = t('Check the server address'));
+    const v = read(), tries = candidateOrigins(v.origin ?? ''), b = $<HTMLButtonElement>('#lgo', m), err = $('.err', m);
+    if (!tries.length) return void (err.textContent = t('Check the server address'));
+    const secret = mode === 'code' ? (v.code ?? '').replace(/\s/g, '') : v.password ?? '';
+    if (!secret) return void (err.textContent = t(mode === 'code' ? 'Enter the code from the server panel' : 'Enter the household password'));
     b.disabled = true;
     b.innerHTML = `${ico('loader-circle', 's spin')}${t('Linking')}`;
     try {
-      const r = await fetch(`${origin}/api/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: (v.code ?? '').replace(/\s/g, ''), name: app.host.id === 'android' ? 'Android TV' : app.host.id === 'cooldash' ? 'CoolDash TV' : 'TV' }) });
+      const at = await reachServer(tries);
+      if (!at) throw new Error(t('The server could not be reached at this address'));
+      const r = await fetch(`${at}/api/${mode === 'code' ? 'pair' : 'login'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'code' ? { code: secret, name: deviceName() } : { password: secret, device: true, name: deviceName() }) });
       const j = (await r.json().catch(() => ({}))) as { token?: string; message?: string };
-      if (!r.ok || !j.token) throw new Error(j.message ?? t('The server refused the code'));
-      await app.store.set(LINK_KEY, { origin, token: j.token } satisfies ServerLink);
+      if (!r.ok) throw new Error(t(j.message ?? (mode === 'code' ? 'The server refused the code' : 'Wrong password')));
+      // A server from before 0.42.0 signs a browser in with the password, but gives no token for a device.
+      if (!j.token) throw new Error(t('This server is too old to link with the password: use a code, or update it.'));
+      await app.store.set(LINK_KEY, { origin: at, token: j.token } satisfies ServerLink);
       toast(t('Linked. Starting on the server…'));
       setTimeout(() => location.reload(), 600);
     } catch (e) {
-      $('.err', m).textContent = (e as Error).message.includes('fetch') ? t('The server could not be reached at this address') : (e as Error).message;
+      err.textContent = (e as Error).message;
       b.disabled = false;
       b.textContent = t('Link');
     }

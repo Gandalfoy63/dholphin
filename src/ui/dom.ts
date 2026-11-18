@@ -130,7 +130,13 @@ export const touch = () => form !== 'tv';
 export function fitTv() {
   form = detectForm();
   const tv = TV();
-  if (form !== 'tv') tv.dataset.form = form;
+  if (form !== 'tv') {
+    tv.dataset.form = form;
+    // The keyboard makes the page shorter instead of covering it (a browser only shrinks what is visible by default),
+    // so a sheet and its fields rise above it. Docs: Web Platform/viewport meta. Not on a TV, whose canvas would shrink.
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
+    if (meta && !meta.content.includes('interactive-widget')) meta.content += ', interactive-widget=resizes-content';
+  }
   const fit = () => {
     if (form !== 'tv') {
       const s = TOUCH_SCALE[form], w = innerWidth / s, h = innerHeight / s;
@@ -140,7 +146,11 @@ export function fitTv() {
       tv.style.setProperty('--tvh', `${h}px`);
       tv.style.setProperty('--s', String(s));
       tv.style.transform = `scale(${s})`;
-      tv.dataset.nav = innerWidth > innerHeight ? 'rail' : 'bar';
+      // Upright, unless the keyboard (which shortens the screen) is what made it wider than tall.
+      const typing = document.activeElement instanceof HTMLInputElement && tv.contains(document.activeElement);
+      if (!typing) tv.dataset.nav = innerWidth > innerHeight ? 'rail' : 'bar';
+      // The field being typed in stays in view above the keyboard.
+      if (typing) requestAnimationFrame(() => document.activeElement?.scrollIntoView({ block: 'center' }));
       return;
     }
     const w = Math.round(Math.min(MAX_W, Math.max(1920, (1080 * innerWidth) / innerHeight)));

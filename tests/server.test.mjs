@@ -108,6 +108,15 @@ describe('server', () => {
     expect((await call('/api/store/profiles', { token: r.token })).status).toBe(200);
     expect((await call('/api/pair', { method: 'POST', body: { code, name: 'Again' } })).status).toBe(403);
   });
+  it('links an app with the household password: a device token, no cookie', async () => {
+    expect((await call('/api/login', { method: 'POST', body: { password: 'nope', device: true } })).status).toBe(401);
+    const res = await call('/api/login', { method: 'POST', body: { password: 'household-pass', device: true, name: 'Android phone' } });
+    const r = await res.json();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('set-cookie')).toBeNull();
+    expect(typeof r.token).toBe('string');
+    expect((await call('/api/store/profiles', { token: r.token })).status).toBe(200);
+  });
   it('tells local addresses from public ones, and serves no file outside the app', async () => {
     expect(['http://192.168.1.2:8096', 'http://jellyfin:8096', 'http://nas.local', 'http://10.0.0.5'].every(isPrivate)).toBe(true);
     expect(['https://jellyfin.example.com', 'https://media.my-home.fr'].some(isPrivate)).toBe(false);

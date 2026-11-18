@@ -142,7 +142,8 @@ SOURCES = {
         "Edge to Edge": "develop/ui/views/layout/edge-to-edge",
         "Immersive Mode": "develop/ui/views/layout/immersive",
         "WindowInsetsControllerCompat": "reference/androidx/core/view/WindowInsetsControllerCompat",
-        "Large Screens Orientation": "develop/ui/compose/layouts/adaptive/app-orientation-aspect-ratio-resizability"}),
+        "Large Screens Orientation": "develop/ui/compose/layouts/adaptive/app-orientation-aspect-ratio-resizability",
+        "Software Keyboard": "develop/ui/views/layout/sw-keyboard"}),
     "GitHub": ("REST 2022-11-28", "https://docs.github.com/en", {
         "Releases API": "rest/releases/releases", "Release Assets API": "rest/releases/assets"}),
     "GitHub CLI": ("current", "https://cli.github.com/manual", {

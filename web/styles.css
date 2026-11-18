@@ -390,6 +390,7 @@ h1,h2,h3,p{margin:0}
 .fields{display:grid;gap:12px;width:880px}
 .field{display:grid;gap:4px}
 .field span{color:var(--muted);font-size:20px}
+.field[hidden]{display:none}
 .field input{font:inherit;font-size:24px;color:var(--text);background:var(--surface);border:2px solid var(--border);border-radius:8px;padding:10px 16px;width:100%;box-sizing:border-box;outline:0}
 .field input:focus{outline:3px solid #fff;outline-offset:2px}
 .kb.full{grid-template-columns:repeat(13,64px)}
