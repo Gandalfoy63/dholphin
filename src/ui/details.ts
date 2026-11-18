@@ -4,7 +4,7 @@ import type { Provider, Title } from '@/sdk/types';
 import type { Person } from '@/core/cast';
 import type { Grade } from '@/core/catalog';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, plogo, tvScale, tvW, TV, toast, FADE, FADE_OUT, RISE } from './dom';
+import { A, $, $$, cascade, closeHtml, esc, ico, plogo, touch, tvH, tvScale, tvW, TV, toast, FADE, FADE_OUT, RISE } from './dom';
 import { go, nav } from './focus';
 import { getLocale, reasonText, t as tr } from './i18n';
 import { artHtml, bindCards, cardHtml, scoresHtml, type Item } from './rows';
@@ -20,11 +20,11 @@ export async function openDetails(input: Title, from?: HTMLElement | null, why?:
   returnTo = from ?? (document.activeElement as HTMLElement);
   $('.dlayer', TV())?.remove();
   const tv = TV();
-  tv.insertAdjacentHTML('beforeend', `<div class="layer dlayer" style="z-index:10"><div class="dback">${artHtml(input, 'w1280')}<div class="scrim"></div></div><div class="dscroll"><div class="dtop"><div class="dtext"></div></div><div class="dsecs"><section data-sec="cast"></section><section data-sec="voices"></section><section data-sec="more"></section><section data-sec="grades"></section></div></div></div>`);
+  tv.insertAdjacentHTML('beforeend', `<div class="layer dlayer" style="z-index:10">${closeHtml(tr('Close'))}<div class="dback">${artHtml(input, 'w1280')}<div class="scrim"></div></div><div class="dscroll"><div class="dtop"><div class="dtext"></div></div><div class="dsecs"><section data-sec="cast"></section><section data-sec="voices"></section><section data-sec="more"></section><section data-sec="grades"></section></div></div></div>`);
   const L = $('.dlayer', tv), back = $('.dback', L), text = $('.dtext', L), scroll = $('.dscroll', L);
   // The page moves with focus, as Home does: the top for the buttons, a section's heading near the top for the rest.
   L.addEventListener('focusin', (e) => {
-    if (nav.pointer) return; // The pointer doesn't move the page; the wheel does.
+    if (nav.pointer || touch()) return; // The pointer doesn't move the page; the wheel does. A touch screen scrolls it.
     const sec = (e.target as HTMLElement).closest<HTMLElement>('[data-sec]');
     const most = Math.max(0, scroll.scrollHeight - 1080);
     scroll.style.transform = `translateY(${-(sec ? Math.min(most, Math.max(0, sec.offsetTop - 96)) : 0)}px)`;
@@ -32,7 +32,7 @@ export async function openDetails(input: Title, from?: HTMLElement | null, why?:
   });
   if (from) {
     const r = from.getBoundingClientRect(), o = tv.getBoundingClientRect(), s = tvScale();
-    A(back, [{ transform: `translate(${(r.left - o.left) / s}px,${(r.top - o.top) / s}px) scale(${r.width / s / tvW()},${r.height / s / 1080})` }, { transform: 'none' }], { duration: 340 });
+    A(back, [{ transform: `translate(${(r.left - o.left) / s}px,${(r.top - o.top) / s}px) scale(${r.width / s / tvW()},${r.height / s / tvH()})` }, { transform: 'none' }], { duration: 340 });
     back.style.transformOrigin = '0 0';
   } else A(back, FADE, { duration: 300 });
   A($('.scrim', back), FADE, { duration: 300, delay: 60 });
@@ -264,6 +264,7 @@ function fillPeople(sec: HTMLElement, heading: string, people: Person[], note = 
   const track = $('.ctrack', sec);
   $$('.pc', track).forEach((el, i) => {
     el.addEventListener('focus', () => {
+      if (touch()) return; // The row scrolls natively.
       const room = tvW() - 96 - 64, end = el.offsetLeft + el.offsetWidth;
       track.style.transform = `translateX(${-Math.max(0, end - room + 40)}px)`;
     });

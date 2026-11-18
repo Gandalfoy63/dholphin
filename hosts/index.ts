@@ -85,6 +85,8 @@ interface AndroidBridge {
   qr?(text: string): string;
   localAddresses?(): string;
   installUpdate(url: string): void;
+  /** Since 0.42.0: "1" while a video plays (sideways, no system bars, on a phone or a tablet), "0" after. */
+  watching?(on: string): void;
   exit(): void;
 }
 type AndroidEvent = { t: 'phone'; values: Record<string, string> } | { t: 'update'; pct?: number; result?: 'started' | 'needs_permission' | 'failed' };
@@ -112,6 +114,7 @@ function android(b: AndroidBridge): Host {
     removeCookies: async () => undefined,
     takeExternalReport: async () => null,
     close: () => b.exit(),
+    watching: b.watching ? (on: boolean) => b.watching!(on ? '1' : '0') : undefined,
     qr: b.qr ? async (text: string) => b.qr!(text) || null : undefined,
     localAddresses: b.localAddresses ? async () => JSON.parse(b.localAddresses!() || '[]') as string[] : undefined,
     phoneForm: {

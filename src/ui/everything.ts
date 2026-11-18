@@ -3,7 +3,7 @@
 import type { Title } from '@/sdk/types';
 import { rankGrade } from '@/core/grades';
 import { app } from './app';
-import { A, $, $$, cascade, esc, RISE } from './dom';
+import { A, $, $$, cascade, esc, RISE, touch } from './dom';
 import { t as tr } from './i18n';
 import { bindCards, cardHtml, type Item } from './rows';
 
@@ -95,7 +95,7 @@ export function appendEverything(scroller: HTMLElement, after: Element, source: 
       y += n.offsetTop;
       n = n.offsetParent as HTMLElement | null;
     }
-    scroller.style.transform = `translateY(${-Math.max(0, y - 220)}px)`;
+    if (!touch()) scroller.style.transform = `translateY(${-Math.max(0, y - 220)}px)`;
     const cards = $$('.card', grid);
     if (el.classList.contains('card') && cards.indexOf(el) > cards.length - 11) void grow();
   });

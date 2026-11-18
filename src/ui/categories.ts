@@ -3,7 +3,7 @@
 import { byRating, CATEGORIES, category, deeperQueries, type Category, type CategoryQuery } from '@/core/categories';
 import type { Title } from '@/sdk/types';
 import { app } from './app';
-import { A, $, $$, esc, RISE } from './dom';
+import { A, $, $$, esc, RISE, touch } from './dom';
 import { go, nav } from './focus';
 import { getLocale, t as tr } from './i18n';
 
@@ -85,7 +85,7 @@ export async function pageCategories(ct: HTMLElement, openCat: (id: string) => v
     animateTile(tile, c);
     tile.onclick = () => openCat(c.id);
     tile.addEventListener('focus', () => {
-      if (nav.pointer) return;
+      if (nav.pointer || touch()) return;
       const y = tile.getBoundingClientRect().top - scroll.getBoundingClientRect().top;
       const s = tile.getBoundingClientRect().height / tile.offsetHeight;
       scroll.style.transform = `translateY(${-Math.max(0, y / s - 160)}px)`;

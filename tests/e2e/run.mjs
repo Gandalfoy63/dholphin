@@ -235,7 +235,7 @@ await p.mouse.move(40, 400, { steps: 3 });
 await until(p, () => document.querySelector('.rail.open'));
 await p.waitForTimeout(800);
 await shot(p, '08b-menu-hover');
-const labels = await p.evaluate(() => [...document.querySelectorAll('.rail .rname,.rail .ni>span:not(.av)')].map((s) => { const r = s.getBoundingClientRect(), b = document.elementFromPoint(r.left + 4, r.top + r.height / 2); return Number(getComputedStyle(s).opacity) === 1 && r.width > 0 && !!b?.closest('.rail'); }));
+const labels = await p.evaluate(() => [...document.querySelectorAll('.rail .rname,.rail .ni>span:not(.av)')].filter((s) => s.getBoundingClientRect().width).map((s) => { const r = s.getBoundingClientRect(), b = document.elementFromPoint(r.left + 4, r.top + r.height / 2); return Number(getComputedStyle(s).opacity) === 1 && r.width > 0 && !!b?.closest('.rail'); }));
 check('Opening the menu shows its name and every label', labels.length >= 9 && labels.every(Boolean), labels.join());
 // Over the hero's picture, where nothing takes focus.
 await p.mouse.move(1000, 40, { steps: 3 });

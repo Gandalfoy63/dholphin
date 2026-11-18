@@ -3,7 +3,7 @@
 import type { Episode, Provider, Title } from '@/sdk/types';
 import { mergeEpisodes, mergeSeasons, type EpisodeRow, type SeasonRow } from '@/core/episodes';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, leave, TV, toast } from './dom';
+import { A, $, $$, cascade, closeHtml, esc, ico, leave, touch, TV, toast } from './dom';
 import { getLocale, t as tr } from './i18n';
 import { go } from './focus';
 import { startPlay } from './play';
@@ -19,7 +19,7 @@ interface Standing { label: string; tone: 'ok' | 'part' | 'asked' | 'none' }
  */
 export async function openEpisodes(t: Title, p: Provider | null, opener: HTMLElement) {
   $('.epm', TV())?.remove();
-  TV().insertAdjacentHTML('beforeend', `<div class="modal epm" role="dialog" aria-label="${esc(tr('Episodes of {name}', { name: t.name }))}"><div class="epm-in"><header><h2>${esc(t.name)}</h2><span class="muted">${tr('Episodes')}</span></header><div class="epm-body"><div class="epm-s"><div class="epm-sl" role="tablist" aria-label="${tr('Seasons')}"><span class="btn" aria-busy="true">${tr('Loading')}</span></div></div><div class="epm-right"><div class="epm-head"></div><div class="epm-clip"><div class="epm-list" role="list"></div></div></div></div></div></div>`);
+  TV().insertAdjacentHTML('beforeend', `<div class="modal epm" role="dialog" aria-label="${esc(tr('Episodes of {name}', { name: t.name }))}">${closeHtml(tr('Close'))}<div class="epm-in"><header><h2>${esc(t.name)}</h2><span class="muted">${tr('Episodes')}</span></header><div class="epm-body"><div class="epm-s"><div class="epm-sl" role="tablist" aria-label="${tr('Seasons')}"><span class="btn" aria-busy="true">${tr('Loading')}</span></div></div><div class="epm-right"><div class="epm-head"></div><div class="epm-clip"><div class="epm-list" role="list"></div></div></div></div></div></div>`);
   const m = $('.epm', TV()), side = $('.epm-sl', m), head = $('.epm-head', m), list = $('.epm-list', m);
   A($('.epm-in', m), [{ opacity: 0, transform: 'translateX(48px)' }, { opacity: 1, transform: 'none' }], { duration: 340 });
   A(m, [{ opacity: 0 }, { opacity: 1 }], { duration: 240 });
@@ -146,6 +146,7 @@ const episodeName = (e: EpisodeRow) => (!e.name || PLAIN_EPISODE.test(e.name.tri
 
 /** Keeps the focused entry in view in a column that slides instead of scrolling. */
 function slide(col: HTMLElement, b: HTMLElement) {
+  if (touch()) return; // A touch screen's columns scroll natively.
   const clip = col.parentElement as HTMLElement, cs = getComputedStyle(clip);
   const room = clip.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
   col.style.transform = `translateY(${-Math.max(0, Math.min(col.scrollHeight - room, b.offsetTop - room / 3))}px)`;

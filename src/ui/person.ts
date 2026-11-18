@@ -3,7 +3,7 @@
 import type { PersonPage } from '@/core/catalog';
 import type { Rating } from '@/core/library';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, leave, tvW, TV, toast, RISE } from './dom';
+import { A, $, $$, cascade, closeHtml, esc, ico, leave, touch, tvW, TV, toast, RISE } from './dom';
 import { go, nav } from './focus';
 import { getLocale, t as tr } from './i18n';
 import { bindCards, cardHtml, type Item } from './rows';
@@ -28,7 +28,7 @@ const years = (from: string, to?: string | null) => {
  */
 export async function openPerson(ref: { id?: number; name: string }, opener: HTMLElement, open: (it: Item, el: HTMLElement) => void) {
   $('.ppl', TV())?.remove();
-  TV().insertAdjacentHTML('beforeend', `<div class="modal ppl" role="dialog" aria-label="${esc(ref.name)}"><div class="ppl-scroll"><div class="ppl-top"><span class="btn" aria-busy="true">${tr('Loading')}</span></div><div class="ppl-secs"></div></div></div>`);
+  TV().insertAdjacentHTML('beforeend', `<div class="modal ppl" role="dialog" aria-label="${esc(ref.name)}">${closeHtml(tr('Close'))}<div class="ppl-scroll"><div class="ppl-top"><span class="btn" aria-busy="true">${tr('Loading')}</span></div><div class="ppl-secs"></div></div></div>`);
   const m = $('.ppl', TV()), scroll = $('.ppl-scroll', m), top = $('.ppl-top', m), secs = $('.ppl-secs', m);
   A(m, [{ opacity: 0, transform: 'scale(1.015)' }, { opacity: 1, transform: 'none' }], { duration: 320 });
   const shut = () => {
@@ -39,7 +39,7 @@ export async function openPerson(ref: { id?: number; name: string }, opener: HTM
   (window as unknown as { _mret?: () => void })._mret = shut;
   // The page moves with focus: the top for the buttons, a section's heading near the top for the rest.
   m.addEventListener('focusin', (e) => {
-    if (nav.pointer) return; // The pointer doesn't move the page; the wheel does.
+    if (nav.pointer || touch()) return; // The pointer doesn't move the page; the wheel does. A touch screen scrolls it.
     const sec = (e.target as HTMLElement).closest<HTMLElement>('section');
     const most = Math.max(0, scroll.scrollHeight - 1080);
     scroll.style.transform = `translateY(${-(sec ? Math.min(most, Math.max(0, sec.offsetTop - 96)) : 0)}px)`;
@@ -93,6 +93,7 @@ export async function openPerson(ref: { id?: number; name: string }, opener: HTM
       open(it, el);
     });
     $$('.card', track).forEach((el) => el.addEventListener('focus', () => {
+      if (touch()) return;
       const room = tvW() - 96 - 64, end = el.offsetLeft + el.offsetWidth;
       track.style.transform = `translateX(${-Math.max(0, end - room + 40)}px)`;
     }));
@@ -101,6 +102,7 @@ export async function openPerson(ref: { id?: number; name: string }, opener: HTM
     secs.insertAdjacentHTML('beforeend', `<section class="ppl-photos"><h2>${tr('Photos')}</h2><div class="cclip"><div class="ctrack ppl-ptrack" role="list">${p.photos.map((src, i) => `<div class="f ppl-pic" tabindex="0" role="listitem" aria-label="${esc(tr('Photo {n} of {name}', { n: i + 1, name: p.name }))}"><img src="${esc(src)}" alt="" loading="lazy"></div>`).join('')}</div></div><p class="ccred">${tr('Photos and biography from TMDB')}</p></section>`);
     const track = $('.ppl-ptrack', secs);
     $$('.ppl-pic', track).forEach((el) => el.addEventListener('focus', () => {
+      if (touch()) return;
       const room = tvW() - 96 - 64, end = el.offsetLeft + el.offsetWidth;
       track.style.transform = `translateX(${-Math.max(0, end - room + 40)}px)`;
     }));

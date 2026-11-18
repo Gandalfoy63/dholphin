@@ -2,7 +2,7 @@
 // Purpose: a hero and rows of cards. Rows load on their own, and an empty row hides itself.
 import type { Title } from '@/sdk/types';
 import { app } from './app';
-import { $, $$, A, FADE, RISE, TV, cascade, esc, ico, plogo, tvW, viaApp } from './dom';
+import { $, $$, A, FADE, RISE, TV, cascade, esc, ico, plogo, touch, tvW, viaApp } from './dom';
 import { focusRow, go, nav } from './focus';
 import { t as tr } from './i18n';
 import { schedulePreview } from './preview';
@@ -94,8 +94,8 @@ function reveal(el: HTMLElement) {
   else setTimeout(() => {
     if (me === tick && document.activeElement === el) void prime(el, true);
   }, 150);
-  // Staying on a card plays its trailer, in a preview above it.
-  schedulePreview(el, () => (me === tick && document.activeElement === el ? it.title : null));
+  // Staying on a card plays its trailer, in a preview above it. Not on a touch screen: a tap opens the title.
+  if (!touch()) schedulePreview(el, () => (me === tick && document.activeElement === el ? it.title : null));
 }
 
 /** Cards whose grade and age rating are loaded, or loading. */
@@ -183,7 +183,7 @@ document.addEventListener('focusin', (e) => {
   const el = e.target as HTMLElement;
   // Back up to the hero (the showcase): the page goes back to its top, or the hero stays above the screen.
   const hero = el.closest?.('.hero'), sc = hero?.closest<HTMLElement>('.scroller');
-  if (sc && !nav.pointer) sc.style.transform = 'none';
+  if (sc && !nav.pointer && !touch()) sc.style.transform = 'none';
   const row = el.classList?.contains('card') ? el.closest<HTMLElement>('.row') : null;
   if (row === litRow) return;
   litRow?.classList.remove('fr');
@@ -204,7 +204,8 @@ function onCard(el: HTMLElement) {
     row.dataset.last = String(i);
     const shape = shapeOf(row), fit = fits(shape);
     // The remote keeps the focused card in view. The pointer focuses what it is over and leaves the row where it is.
-    if (!nav.pointer) {
+    // A touch screen's rows scroll natively.
+    if (!nav.pointer && !touch()) {
       let st = Number(row.dataset.start ?? 0);
       if (i < st) st = i;
       if (i > st + fit - 1) st = i - fit + 1;
@@ -219,7 +220,7 @@ function onCard(el: HTMLElement) {
       cards[j]!.classList.toggle('af', j > i);
     }
     const s = row.closest<HTMLElement>('.scroller');
-    if (s && !nav.pointer) s.style.transform = $('.chero', s) && row === $('.row:not([hidden])', s) ? 'none' : `translateY(${-(row.offsetTop - 80)}px)`;
+    if (s && !nav.pointer && !touch()) s.style.transform = $('.chero', s) && row === $('.row:not([hidden])', s) ? 'none' : `translateY(${-(row.offsetTop - 80)}px)`;
   }
   reveal(el);
 }

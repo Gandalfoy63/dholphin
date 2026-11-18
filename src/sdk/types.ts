@@ -162,6 +162,8 @@ export interface Host {
   localAddresses?(): Promise<string[]>;
   /** Updates of the app itself, where the device installs them. */
   updater?: { version: string; build: number; install(url: string, onProgress: (pct: number) => void): Promise<'started' | 'needs_permission' | 'failed'> };
+  /** Android: a video plays (true) or stopped (false). On a phone or a tablet the screen turns sideways and the system bars hide while it plays. */
+  watching?(on: boolean): void;
   cookie(url: string, name: string): Promise<string | null>;
   removeCookies(url: string): Promise<void>;
   /** What a service's player reported since the page was left. */

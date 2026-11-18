@@ -1,5 +1,5 @@
 // Docs: docs/02 - Tech/Android App.md
-// Purpose: what the page may ask of Android, as `DholphinAndroid`: open the Netflix app, the phone form, updates, leaving.
+// Purpose: what the page may ask of Android, as `DholphinAndroid`: open the Netflix app, the phone form, updates, a video playing, leaving.
 package app.dholphin.tv
 
 import android.app.Activity
@@ -17,7 +17,7 @@ import org.json.JSONObject
  * Every call checks its input against what Dholphin itself needs, because a page's frames (a YouTube player) may
  * reach the same object: only the Netflix apps open, only Netflix addresses, only this app's own releases install.
  */
-class Bridge(private val activity: Activity, private val send: (JSONObject) -> Unit) {
+class Bridge(private val activity: Activity, private val send: (JSONObject) -> Unit, private val onWatching: (Boolean) -> Unit) {
     private val phone = PhoneForm(activity) { values -> send(JSONObject().put("t", "phone").put("values", values)) }
     private val updater = Updater(activity) { event -> send(event.put("t", "update")) }
 
@@ -64,6 +64,9 @@ class Bridge(private val activity: Activity, private val send: (JSONObject) -> U
 
     /** Downloads and installs a newer version of this app. Progress and the result come back as `update` events. */
     @JavascriptInterface fun installUpdate(url: String) = updater.install(url)
+
+    /** "1" while a video plays, "0" after: a phone or a tablet turns sideways and hides its bars. Anything else is "0". */
+    @JavascriptInterface fun watching(on: String) = onWatching(on == "1")
 
     @JavascriptInterface fun exit() = activity.runOnUiThread { activity.finish() }
 

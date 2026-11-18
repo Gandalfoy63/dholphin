@@ -4,7 +4,7 @@ import Hls from 'hls.js/dist/hls.light.mjs';
 import type { Episode, InternalSession, Provider, StreamChoice, StreamTrack, Title } from '@/sdk/types';
 import { clock, cuesAt, nextAt, parseCues, seekStep, segmentAt, trickplaySpot, type Cue } from '@/core/playback';
 import { app } from './app';
-import { A, $, $$, esc, ico, TV, toast, FADE } from './dom';
+import { A, $, $$, closeHtml, esc, ico, touch, TV, toast, FADE } from './dom';
 import { BACK_KEYS, go, nav } from './focus';
 import { getLocale, t } from './i18n';
 
@@ -29,12 +29,14 @@ export async function player(p: Provider, title: Title, first: InternalSession, 
   const ret = document.activeElement as HTMLElement | null;
   const btn = (a: string, icon: string, label: string, wide = false) =>
     `<button class="f pb${wide ? '' : ' io'}" type="button" data-a="${a}" aria-label="${t(label)}">${ico(icon)}<span class="${wide ? '' : 'tip'}">${t(label)}</span></button>`;
-  TV().insertAdjacentHTML('beforeend', `<div class="player" role="dialog" aria-label="${esc(title.name)}"><video playsinline></video>
+  // A touch screen can ask for the whole screen: a button for it, where the browser allows it (Android does it itself).
+  const canFull = touch() && !app.host.watching && !!document.fullscreenEnabled;
+  TV().insertAdjacentHTML('beforeend', `<div class="player" role="dialog" aria-label="${esc(title.name)}"><video playsinline></video>${closeHtml(t('Close'))}
 <div class="psub ${prefs.subSize}" aria-hidden="true"></div><div class="pspin" hidden>${ico('loader-circle', 'spin')}</div><div class="pflash" aria-hidden="true"></div><div class="pmsg" hidden></div><div class="pprompt"></div>
 <div class="pctl"><div class="phead"><b>${esc(title.name)}</b><span class="pe muted"></span></div>
 <div class="pscrub f" tabindex="0" role="slider" aria-label="${t('Position')}" aria-valuemin="0"><div class="pbar"><i class="pbuf"></i><i class="pplay"></i><span class="pmarks"></span><i class="pknob"></i></div><div class="pthumb" hidden><div class="pimg"></div><span class="ptt"></span><span class="pch"></span></div></div>
 <div class="ptime"><span class="pn">0:00</span><span class="pst"></span><span class="psp"></span><span class="pend muted"></span><span class="pd">0:00</span></div>
-<div class="prow">${btn('back', 'rotate-ccw', 'Back 10 seconds')}${btn('toggle', 'pause', 'Pause')}${btn('fwd', 'rotate-cw', 'Forward 10 seconds')}<span class="psp"></span>${btn('tracks', 'captions', 'Audio and subtitles', true)}${btn('speed', 'gauge', 'Speed', true)}${btn('quality', 'monitor-play', 'Quality', true)}${btn('episodes', 'list-video', 'Episodes', true)}${btn('next', 'skip-forward', 'Next episode', true)}</div></div>
+<div class="prow">${btn('back', 'rotate-ccw', 'Back 10 seconds')}${btn('toggle', 'pause', 'Pause')}${btn('fwd', 'rotate-cw', 'Forward 10 seconds')}<span class="psp"></span>${btn('tracks', 'captions', 'Audio and subtitles', true)}${btn('speed', 'gauge', 'Speed', true)}${btn('quality', 'monitor-play', 'Quality', true)}${btn('episodes', 'list-video', 'Episodes', true)}${btn('next', 'skip-forward', 'Next episode', true)}${canFull ? btn('full', 'maximize', 'Full screen', true) : ''}</div></div>
 <div class="ppanel" role="menu" hidden></div></div>`);
   const L = $('.player', TV()), v = L.querySelector('video')!, msg = $('.pmsg', L), bar = $('.pscrub', L), sub = $('.psub', L), prompt = $('.pprompt', L), panel = $('.ppanel', L), spin = $('.pspin', L);
   A(L, FADE, { duration: 200 });
@@ -371,6 +373,92 @@ export async function player(p: Provider, title: Title, first: InternalSession, 
     if (!nextShown && prompt.dataset.k) hidePrompt();
   };
 
+  // ---- a touch screen ----
+  /**
+   * The whole screen, turned sideways where the browser allows it (Fullscreen API, ScreenOrientation.lock). Either
+   * may be refused: the video then plays in the page as it is.
+   */
+  const fullScreen = async (on: boolean) => {
+    try {
+      if (on) {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+        await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape').catch(() => undefined);
+      } else {
+        screen.orientation?.unlock?.();
+        if (document.fullscreenElement) await document.exitFullscreen();
+      }
+    } catch {
+      // Refused (no tap just before, or not allowed here): the page stays as it is.
+    }
+    const b = $('[data-a="full"]', L);
+    if (b) b.innerHTML = `${ico(document.fullscreenElement ? 'minimize' : 'maximize')}<span>${t(document.fullscreenElement ? 'Exit full screen' : 'Full screen')}</span>`;
+  };
+  /**
+   * A tap shows the controls, or hides them; two taps on the left or right third go back or forward 10 seconds, in
+   * the middle they play or pause. The bar follows a finger dragged along it, with its preview picture.
+   */
+  const TAP_GAP = 280;
+  const bindTouch = () => {
+    let lastTap = 0, lastX = -1, single = 0;
+    const hide = () => {
+      clearTimeout(idle);
+      if (!v.paused && panel.hidden && scrubAt === null) L.classList.add('idle');
+    };
+    L.addEventListener('pointerup', (e) => {
+      if ((e.target as Element).closest('.prow, .ppanel, .pprompt, .pscrub, .xbtn, .phead, .ptime')) return wake();
+      const now = performance.now(), r = L.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+      if (now - lastTap < TAP_GAP && Math.abs(e.clientX - lastX) < r.width / 6) {
+        clearTimeout(single);
+        lastTap = 0;
+        if (x < 1 / 3 || x > 2 / 3) {
+          const dir = x < 1 / 3 ? -1 : 1;
+          seekTo(v.currentTime + dir * 10);
+          flash(`${ico(dir < 0 ? 'rotate-ccw' : 'rotate-cw')}<span>${dir < 0 ? '-' : '+'}0:10</span>`);
+        } else toggle();
+        return;
+      }
+      lastTap = now;
+      lastX = e.clientX;
+      const was = shown();
+      clearTimeout(single);
+      single = window.setTimeout(() => (was ? hide() : wake()), TAP_GAP);
+    });
+    const at = (e: PointerEvent) => {
+      const r = bar.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * dur();
+    };
+    // The finger dragging the bar, if one is. Captured where the browser allows, so it may leave the bar's strip.
+    let dragging: number | null = null;
+    bar.addEventListener('pointerdown', (e) => {
+      if (!dur()) return;
+      dragging = e.pointerId;
+      try {
+        bar.setPointerCapture(e.pointerId);
+      } catch {
+        // Not a live pointer: the drag still follows its moves over the bar.
+      }
+      clearTimeout(scrubT);
+      clearTimeout(idle);
+      scrubAt = at(e);
+      preview(scrubAt);
+      paint();
+    });
+    bar.addEventListener('pointermove', (e) => {
+      if (dragging !== e.pointerId || scrubAt === null) return;
+      scrubAt = at(e);
+      preview(scrubAt);
+      paint();
+    });
+    const end = (e: PointerEvent) => {
+      if (dragging !== e.pointerId) return;
+      dragging = null;
+      if (bar.hasPointerCapture(e.pointerId)) bar.releasePointerCapture(e.pointerId);
+      commit();
+    };
+    bar.addEventListener('pointerup', end);
+    bar.addEventListener('pointercancel', end);
+  };
+
   // ---- panels: audio and subtitles, speed, quality, episodes ----
   const opt = (label: string, on: boolean, data: string, extra = '') => `<button class="f po" type="button" role="menuitemradio" aria-checked="${on}" ${data}>${ico('check', 's ck')}<span>${esc(label)}</span>${extra}</button>`;
   const col = (heading: string, body: string) => `<div class="pcol"><h3>${esc(heading)}</h3>${body}</div>`;
@@ -485,6 +573,7 @@ export async function player(p: Provider, title: Title, first: InternalSession, 
     quality: (b) => panelQuality(b),
     episodes: (b) => void panelEpisodes(b),
     next: () => s.next && void playEpisode(s.next),
+    full: () => void fullScreen(!document.fullscreenElement),
   };
   $$('.prow [data-a]', L).forEach((b) => (b.onclick = (e) => {
     e.stopPropagation();
@@ -496,6 +585,10 @@ export async function player(p: Provider, title: Title, first: InternalSession, 
     if (closing || !L.isConnected) return;
     closing = true; // From here, the video's own events must not report: resetting it would send position 0.
     nav.override = null;
+    if (touch()) {
+      app.host.watching?.(false);
+      if (document.fullscreenElement) void fullScreen(false);
+    }
     clearInterval(ticker);
     clearInterval(countT);
     clearTimeout(idle);
@@ -580,8 +673,11 @@ export async function player(p: Provider, title: Title, first: InternalSession, 
     }
   };
 
-  L.addEventListener('mousemove', wake);
-  v.addEventListener('click', toggle);
+  if (touch()) bindTouch();
+  else {
+    L.addEventListener('mousemove', wake);
+    v.addEventListener('click', toggle);
+  }
   bar.addEventListener('click', (e) => {
     const r = bar.getBoundingClientRect();
     seekTo(((e.clientX - r.left) / r.width) * dur());
@@ -624,6 +720,11 @@ export async function player(p: Provider, title: Title, first: InternalSession, 
   };
   requestAnimationFrame(frame);
 
+  if (touch()) {
+    // Sideways and on the whole screen while it plays: Android turns the screen itself, a browser is asked.
+    if (app.host.watching) app.host.watching(true);
+    else if (canFull) void fullScreen(true);
+  }
   attach(s.source.startSec ?? 0);
   bar.focus({ preventScroll: true });
   wake();

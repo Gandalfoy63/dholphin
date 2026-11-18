@@ -1,6 +1,6 @@
 // Docs: docs/05 - UI-UX/Focus and Remote.md
 // Purpose: moves focus with the arrows, by geometry, with rows remembering their place.
-import { $, $$, TV } from './dom';
+import { $, $$, touch, TV } from './dom';
 
 export const BACK_KEYS = new Set(['Escape', 'GoBack', 'BrowserBack', 'XF86Back']);
 export const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
@@ -31,6 +31,7 @@ let settle = 0;
  * (longer) one again for focus moves.
  */
 export function slideBy(el: HTMLElement, dy: number, view = 1080) {
+  if (touch()) return; // A touch screen's pages scroll natively.
   const max = Math.max(0, el.scrollHeight - view), to = Math.min(max, Math.max(0, slidY(el) + dy));
   el.style.transition = 'transform 140ms ease-out';
   el.style.transform = `translateY(${-to}px)`;
@@ -64,6 +65,8 @@ export function layer(): HTMLElement {
 export function focusables(scope: ParentNode): HTMLElement[] {
   return $$('.f', scope).filter((e) => !(e as HTMLButtonElement).disabled && !e.closest('[data-off]') && !e.closest('[hidden]'));
 }
+/** Drawn, and not hidden by the layout: the phone's bar leaves some menu items to More. */
+const shown = (e: HTMLElement) => !!(e.offsetWidth || e.offsetHeight);
 
 /** The nearest element in the direction, preferring those in line. */
 export function nearest(from: DOMRect, dir: Dir, list: { el: HTMLElement; r: DOMRect }[]): HTMLElement | null {
@@ -128,12 +131,15 @@ export function move(dir: Dir) {
     go(focusables(layer())[0]);
     return;
   }
-  const rail = el.closest('.rail');
+  const rail = el.closest<HTMLElement>('.rail');
   if (rail) {
-    if (dir === 'ArrowRight') nav.closeRail();
-    if (dir === 'ArrowUp' || dir === 'ArrowDown') {
-      const all = $$('.f', rail);
-      go(all[all.indexOf(el) + (dir === 'ArrowDown' ? 1 : -1)]);
+    // A touch screen held upright has the menu as a bar at the bottom: along it is Left and Right, out of it Up.
+    const bar = touch() && TV().dataset.nav === 'bar';
+    const [back, fwd, out] = bar ? ['ArrowLeft', 'ArrowRight', 'ArrowUp'] : ['ArrowUp', 'ArrowDown', 'ArrowRight'];
+    if (dir === out) nav.closeRail();
+    if (dir === back || dir === fwd) {
+      const all = $$('.f', rail).filter(shown);
+      go(all[all.indexOf(el) + (dir === fwd ? 1 : -1)]);
     }
     return;
   }
@@ -142,7 +148,7 @@ export function move(dir: Dir) {
   const list = focusables(scope).filter((e) => e !== el && !e.closest('.rail')).map((e) => ({ el: e, r: e.getBoundingClientRect() }));
   const n = nearest(el.getBoundingClientRect(), dir, list);
   if (n) go(n);
-  else if (dir === 'ArrowLeft' && scope === TV() && $('.rail', TV())) nav.openRail();
+  else if ((dir === 'ArrowLeft' || (dir === 'ArrowDown' && touch() && TV().dataset.nav === 'bar')) && scope === TV() && $('.rail', TV())) nav.openRail();
 }
 
 /**
@@ -179,7 +185,14 @@ export function installKeys() {
       nav.onBack();
     }
   });
+  if (touch()) installTouch();
+  // A layer's Close (closeHtml, touch screens only) does exactly what Back does.
+  TV().addEventListener('click', (e) => {
+    if ((e.target as Element).closest?.('.xbtn')) document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  });
   TV().addEventListener('mousemove', (e) => {
+    // A tap sends a mouse move too: on a touch screen it must not move focus, as it does under a mouse.
+    if (touch()) return;
     const f = (e.target as Element).closest?.<HTMLElement>('.f');
     if (f && !(f as HTMLButtonElement).disabled && document.activeElement !== f && !f.closest('[data-off]')) {
       nav.pointer = true;
@@ -196,6 +209,7 @@ export function installKeys() {
   // The wheel and a touchpad scroll the page by pixels, as a website does; focus stays where it is. Sideways (a
   // touchpad's swipe, or Shift and the wheel) over a row turns that row.
   TV().addEventListener('wheel', (e) => {
+    if (touch()) return; // A touch screen's pages scroll natively, a tablet's touchpad included.
     e.preventDefault();
     if (nav.override) return;
     const unit = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
@@ -212,6 +226,19 @@ export function installKeys() {
   document.addEventListener('focusin', (e) => {
     const el = e.target as HTMLElement;
     if (el.classList?.contains('card')) nav.onCard(el);
+  });
+}
+
+/**
+ * A touch screen: a finger is a pointer, so the page never moves with focus (a tapped button simply has it). A
+ * keyboard (a tablet's) moves focus as on a TV, and the page scrolls natively to keep what has focus in view.
+ */
+function installTouch() {
+  nav.pointer = true;
+  TV().addEventListener('pointerdown', () => (nav.pointer = true), { capture: true });
+  document.addEventListener('focusin', (e) => {
+    const el = e.target as HTMLElement;
+    if (!nav.pointer && TV().contains(el) && !el.closest('.rail')) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   });
 }
 

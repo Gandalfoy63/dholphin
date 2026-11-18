@@ -3,7 +3,7 @@
 import { newId } from '@/core/id';
 import type { Profile, Provider, Title } from '@/sdk/types';
 import { app, COLORS, KEY_FIELDS } from './app';
-import { A, $, $$, esc, ico, logoMark, logoStart, plogo, TV, toast } from './dom';
+import { A, $, $$, esc, ico, logoMark, logoStart, plogo, touch, TV, toast } from './dom';
 import { focusables, go, nav } from './focus';
 import { getLocale, LANGUAGES, setLocale, t } from './i18n';
 import { artHtml } from './rows';
@@ -23,6 +23,8 @@ const newOb = (): ObState => {
 };
 let ob = newOb();
 const STEPS = 6;
+/** A TV's words, or a phone's or tablet's ("this device"), both in the dictionary. */
+const here = (tv: string, device: string) => t(touch() ? device : tv);
 let finishCb: (p: Profile, picks: Title[]) => void = () => undefined;
 const cap = (s: string) => (s ? s[0]!.toUpperCase() + s.slice(1) : '');
 
@@ -83,7 +85,7 @@ function chooseMode(o: HTMLElement, n: number) {
   const scans = !!app.host.localAddresses;
   o.style.alignItems = '';
   o.style.justifyContent = '';
-  o.innerHTML = `<h1>${t('How will this TV run?')}</h1><p class="lead">${t('A Dholphin server keeps the profiles, keys and history for every device. On its own, this TV keeps them itself.')}</p><div class="stack" id="modes"><div id="found" class="stack"></div>${scans ? `<div class="prov" id="scan"><span class="plogos">${ico('loader-circle', 's spin')}</span><div class="i"><b>${t('Looking for Dholphin servers on your network')}</b><span class="muted">${t('This takes a few seconds')}</span></div></div>` : ''}${row(ico('globe'), t('Enter a server address'), t('At home or on the internet, with a code from its panel'), t('Enter the address'), 'id="maddr"')}${row(ico('tv'), t('Use this TV on its own'), t('Profiles and keys stay on this TV. You can link a server later in Settings.'), t('Use on its own'), 'id="malone"')}</div>`;
+  o.innerHTML = `<h1>${here('How will this TV run?', 'How will this device run?')}</h1><p class="lead">${here('A Dholphin server keeps the profiles, keys and history for every device. On its own, this TV keeps them itself.', 'A Dholphin server keeps the profiles, keys and history for every device. On its own, this device keeps them itself.')}</p><div class="stack" id="modes"><div id="found" class="stack"></div>${scans ? `<div class="prov" id="scan"><span class="plogos">${ico('loader-circle', 's spin')}</span><div class="i"><b>${t('Looking for Dholphin servers on your network')}</b><span class="muted">${t('This takes a few seconds')}</span></div></div>` : ''}${row(ico('globe'), t('Enter a server address'), t('At home or on the internet, with a code from its panel'), t('Enter the address'), 'id="maddr"')}${row(ico('tv'), here('Use this TV on its own', 'Use this device on its own'), here('Profiles and keys stay on this TV. You can link a server later in Settings.', 'Profiles and keys stay on this device. You can link a server later in Settings.'), t('Use on its own'), 'id="malone"')}</div>`;
   A(o, [{ opacity: 0, transform: 'translateX(24px)' }, { opacity: 1, transform: 'none' }], { duration: 320 });
   $('#maddr', o).onclick = () => linkServer(() => undefined);
   $('#malone', o).onclick = () => leave(() => step(n, app.hasKeys() ? 2 : 1));
@@ -103,7 +105,7 @@ function chooseMode(o: HTMLElement, n: number) {
     if (!sc?.isConnected || ac.signal.aborted) return;
     sc.querySelector('.plogos')!.innerHTML = ico(all.length ? 'check' : 'search');
     sc.querySelector('b')!.textContent = all.length ? t('Search done') : t('No Dholphin server found on this network');
-    sc.querySelector('.muted')!.textContent = all.length ? t('Choose one to link this TV') : t('Enter its address, or use this TV on its own');
+    sc.querySelector('.muted')!.textContent = all.length ? here('Choose one to link this TV', 'Choose one to link this device') : here('Enter its address, or use this TV on its own', 'Enter its address, or use this device on its own');
   });
 }
 

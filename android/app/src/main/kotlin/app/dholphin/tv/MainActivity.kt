@@ -1,18 +1,26 @@
 // Docs: docs/02 - Tech/Android App.md
-// Purpose: the app's one screen: the bundled web app in a full-screen WebView, the remote's keys, Back, and the bridge.
+// Purpose: the app's one screen: the bundled web app in a WebView (full screen on a TV, around the system bars on a phone), the remote's keys, Back, and the bridge.
 package app.dholphin.tv
 
 import android.annotation.SuppressLint
+import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
+import android.widget.FrameLayout
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
 import androidx.activity.OnBackPressedCallback
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
 import org.json.JSONObject
@@ -23,6 +31,10 @@ import java.net.URL
 class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private lateinit var bridge: Bridge
+    /** A TV (Android TV's leanback): always the whole screen. Otherwise a phone or a tablet, held either way. */
+    private val tv by lazy { packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK) }
+    /** A video plays on a phone or a tablet: sideways, without the system bars. */
+    private var watching = false
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,10 +73,27 @@ class MainActivity : ComponentActivity() {
                     request.isForMainFrame && !request.url.toString().startsWith(ORIGIN)
             }
         }
-        bridge = Bridge(this, ::send)
+        bridge = Bridge(this, ::send, ::setWatching)
         web.addJavascriptInterface(bridge, "DholphinAndroid")
-        setContentView(web)
-        fullScreen()
+        if (tv) {
+            setContentView(web)
+            fullScreen()
+        } else {
+            // A phone or a tablet: edge to edge, the page kept clear of the status bar, the navigation bar and a
+            // notch by padding, which goes to nothing when the bars hide for a video. Docs: Android/Edge to Edge.
+            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            WindowCompat.enableEdgeToEdge(window)
+            val frame = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#0E0E10")); addView(web) }
+            ViewCompat.setOnApplyWindowInsetsListener(frame) { v, insets ->
+                val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+            setContentView(frame)
+            // Light icons on the dark page.
+            WindowInsetsControllerCompat(window, frame).isAppearanceLightStatusBars = false
+            WindowInsetsControllerCompat(window, frame).isAppearanceLightNavigationBars = false
+        }
         web.loadUrl(START)
         // Back belongs to the page: it closes what is open, and asks before leaving. The page calls exit() to leave.
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -79,6 +108,25 @@ class MainActivity : ComponentActivity() {
         web.evaluateJavascript("window.dispatchEvent(new CustomEvent('dholphin',{detail:$event}))", null)
     }
 
+    /**
+     * The page plays a video (true) or stopped (false). On a phone or a tablet the screen turns sideways (either way,
+     * by the sensor) and the system bars hide, a swipe showing them for a moment; after, both come back. A TV is
+     * always sideways and full screen. Android 16 lets a large screen ignore the orientation. Docs:
+     * Android/Activity Element, Android/Immersive Mode, Android/Large Screens Orientation.
+     */
+    fun setWatching(on: Boolean) = runOnUiThread {
+        if (tv || on == watching) return@runOnUiThread
+        watching = on
+        requestedOrientation = if (on) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_FULL_USER
+        bars()
+    }
+
+    private fun bars() {
+        val c = WindowInsetsControllerCompat(window, window.decorView)
+        c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        if (watching) c.hide(WindowInsetsCompat.Type.systemBars()) else c.show(WindowInsetsCompat.Type.systemBars())
+    }
+
     private fun fullScreen() {
         @Suppress("DEPRECATION")
         window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
@@ -86,7 +134,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        fullScreen()
+        if (tv) fullScreen() else bars()
         web.onResume()
     }
 

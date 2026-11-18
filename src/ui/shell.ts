@@ -10,7 +10,7 @@ import { profileLang } from '@/core/bands';
 import { isAnime } from '@/core/sources';
 import type { Title } from '@/sdk/types';
 import { app, KEY_FIELDS } from './app';
-import { A, $, $$, cascade, esc, ico, logoMark, plogo, TV, toast, FADE, FADE_OUT, RISE } from './dom';
+import { A, $, $$, cascade, esc, ico, logoMark, plogo, touch, TV, toast, FADE, FADE_OUT, RISE } from './dom';
 import { closeDetails, openDetails } from './details';
 import { focusables, go, nav } from './focus';
 import { pageCategories, pageCategory } from './categories';
@@ -32,6 +32,13 @@ export interface Route { id: string }
  * Home's section tiles (sections.ts), and the sidebar marks Home while one is open.
  */
 const NAV: [string, string, string][] = [['search', 'search', 'Search'], ['home', 'house', 'Home'], ['categories', 'shapes', 'Categories'], ['library', 'library-big', 'Library'], ['list', 'bookmark', 'My List'], ['history', 'history', 'History'], ['requests', 'inbox', 'Requests']];
+/**
+ * A phone's menu: these four and More (Touch Layout). The others (Categories, History, Requests, Settings, the
+ * profile) are in More's sheet. A tablet lying sideways shows them all in its rail. On a touch screen Home comes
+ * first, as the thumb finds it.
+ */
+const BAR = new Set(['home', 'search', 'library', 'list']);
+const navItem = (id: string, icon: string, label: string, aria = '') => `<button class="f ni${BAR.has(id) ? '' : ' nx'}" type="button" data-go="${id}"${aria ? ` aria-label="${esc(aria)}"` : ''}>${icon}<span>${esc(label)}</span></button>`;
 let route = 'home';
 let lastContent: HTMLElement | null = null;
 let backArmed = 0;
@@ -47,14 +54,14 @@ export function showShell(start = 'home', hooks: { profiles: () => void; onboard
   const p = app.profile;
   // The profile loader, if up, stays on top until Home has something to show.
   [...TV().children].forEach((c) => c.classList.contains('pload') || c.remove());
-  TV().insertAdjacentHTML('afterbegin', `<div class="content" id="ct"></div><aside class="rail" aria-label="${t('Main menu')}" data-off="1"><span class="rpill" aria-hidden="true"></span><span class="rbar" aria-hidden="true"></span><div class="rmark"><span style="display:block;width:56px;flex:none">${logoMark('var(--surface)')}</span><span class="rname">dholphin</span></div><nav>${NAV.map(([id, ic, l]) => `<button class="f ni" type="button" data-go="${id}">${id === 'requests' ? plogo('seerr.svg') : ico(ic)}<span>${t(l)}</span></button>`).join('')}</nav><button class="f ni" type="button" data-go="settings">${ico('settings')}<span>${t('Settings')}</span></button><button class="f ni" type="button" data-go="who" aria-label="${t('Switch profile')}">${avatar(p)}<span>${esc(p.name)}</span></button></aside>`);
-  $$('.ni', TV()).forEach((b) => (b.onclick = () => (b.dataset.go === 'who' ? toProfiles() : go2(b.dataset.go!))));
+  TV().insertAdjacentHTML('afterbegin', `<div class="content" id="ct"></div><aside class="rail" aria-label="${t('Main menu')}" data-off="1"><span class="rpill" aria-hidden="true"></span><span class="rbar" aria-hidden="true"></span><div class="rmark"><span style="display:block;width:56px;flex:none">${logoMark('var(--surface)')}</span><span class="rname">dholphin</span></div><nav>${(touch() ? [NAV[1]!, NAV[0]!, ...NAV.slice(2)] : NAV).map(([id, ic, l]) => navItem(id, id === 'requests' ? plogo('seerr.svg') : ico(ic), t(l))).join('')}<button class="f ni nmore" type="button" data-go="more" aria-haspopup="dialog">${ico('ellipsis')}<span>${t('More')}</span></button></nav>${navItem('settings', ico('settings'), t('Settings'))}${navItem('who', avatar(p), p.name, t('Switch profile'))}</aside>`);
+  $$('.ni', TV()).forEach((b) => (b.onclick = () => (b.dataset.go === 'who' ? toProfiles() : b.dataset.go === 'more' ? openMore(b) : go2(b.dataset.go!))));
   // A plain page (History, My List, search results, Requests, Settings) slides to keep what has focus in view: these
   // pages used to stop at the bottom of the screen. Pages built of rows move on their own.
   $('#ct', TV()).addEventListener('focusin', (e) => {
     const el = e.target as HTMLElement, pg = el.closest<HTMLElement>('.pg');
     // The pointer focuses what it is over: the page stays put, as a website does (the wheel scrolls it).
-    if (!pg || el.closest('.row, .modal') || nav.pointer) return;
+    if (!pg || el.closest('.row, .modal') || nav.pointer || touch()) return;
     let y = 0, n: HTMLElement | null = el;
     while (n && n !== pg) {
       y += n.offsetTop;
@@ -89,6 +96,15 @@ function onBack() {
     return;
   }
   if ($('.dlayer', TV())) return closeDetails();
+  // A touch screen's menu is always there: Back goes back a page, and on Home, twice, leaves (a browser goes back to
+  // the page before Dholphin, past the entry `installHistory` keeps in front).
+  if (touch()) {
+    if (goBack()) return;
+    if (Date.now() - backArmed < 3000) return app.host.id === 'browser' ? history.go(-2) : app.host.close();
+    backArmed = Date.now();
+    toast(t(app.host.id === 'android' ? 'Swipe back again to close Dholphin' : 'Press Back again to close Dholphin'));
+    return;
+  }
   if ($('.rail.open', TV())) {
     if (route === 'home') {
       if (Date.now() - backArmed < 3000) return app.host.close();
@@ -116,13 +132,15 @@ function goBack(): boolean {
 }
 function mark() {
   $$('.ni', TV()).forEach((b) => {
-    const on = b.dataset.go === route || (route.startsWith('cat:') && b.dataset.go === 'categories') || (SECTIONS.some((x) => x.id === route) && b.dataset.go === 'home');
+    const page = route.startsWith('cat:') ? 'categories' : SECTIONS.some((x) => x.id === route) ? 'home' : route;
+    // More stands for the pages in its sheet, on a phone.
+    const on = b.dataset.go === page || (b.dataset.go === 'more' && touch() && !BAR.has(page));
     b.classList.toggle('cur', on);
     if (on) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   });
   // The red marker slides to the page you are on.
-  const cur = $('.ni.cur', TV()), rail = $('.rail', TV());
+  const cur = $$('.ni.cur', TV()).find((b) => b.offsetHeight) ?? $('.ni.cur', TV()), rail = $('.rail', TV());
   if (cur && rail) rail.style.setProperty('--by', `${topIn(rail, cur) + 12}px`);
 }
 /** An item's top inside the menu: the list is its own box (it moves with the menu), so offsets add up to the menu. */
@@ -134,10 +152,36 @@ function topIn(rail: HTMLElement, el: HTMLElement) {
   }
   return y;
 }
+/**
+ * A phone's More: the menu items its bar leaves out (Categories, History, Requests, Settings, the profile), in a
+ * sheet that rises from the bottom. Back, Close or a tap beside it closes it.
+ */
+function openMore(opener: HTMLElement) {
+  const items = $$('.ni.nx', TV()).filter((b) => !b.hidden);
+  TV().insertAdjacentHTML('beforeend', `<div class="modal sheet" role="dialog" aria-label="${t('More')}"><div class="panel"><h2>${t('More')}</h2><div class="lopts">${items.map((b) => `<button class="f lopt" type="button" data-to="${b.dataset.go}"${b.classList.contains('cur') ? ' aria-current="page"' : ''}>${b.firstElementChild!.outerHTML}<span>${esc(b.lastElementChild!.textContent)}</span></button>`).join('')}</div><button class="f btn" type="button" id="mx">${t('Close')}</button></div></div>`);
+  const m = $('.modal.sheet:last-child', TV());
+  A($('.panel', m), [{ transform: 'translateY(100%)' }, { transform: 'none' }], { duration: 260 });
+  const shut = () => {
+    (window as unknown as { _mret?: () => void })._mret = undefined;
+    m.remove();
+    if (opener.isConnected) go(opener);
+  };
+  (window as unknown as { _mret?: () => void })._mret = shut;
+  $('#mx', m).onclick = shut;
+  $$('.lopt', m).forEach((b) => (b.onclick = () => {
+    shut();
+    if (b.dataset.to === 'who') toProfiles();
+    else go2(b.dataset.to!);
+  }));
+  go($('.lopt', m));
+}
+
 function openRail() {
   const r = $('.rail', TV());
   if (!r || r.classList.contains('open')) return;
   lastContent = document.activeElement as HTMLElement;
+  // A touch screen's menu is always shown: a keyboard just moves into it.
+  if (touch()) return void go($$('.ni.cur', r).find((b) => b.offsetHeight) ?? $('.ni', r));
   r.classList.add('open');
   r.removeAttribute('data-off');
   showLabels(r);
@@ -161,7 +205,7 @@ TVReady(() => {
   // A real pointer move, so a menu appearing under a still cursor doesn't reopen itself.
   TV().addEventListener('mousemove', (e) => {
     const r = (e.target as Element).closest?.<HTMLElement>('.rail');
-    if (r && !r.classList.contains('open')) {
+    if (r && !r.classList.contains('open') && !touch()) {
       lastContent = document.activeElement as HTMLElement;
       r.classList.add('open');
       r.removeAttribute('data-off');
@@ -195,6 +239,7 @@ export function go2(id: string) {
 
 async function render(first: boolean) {
   const ct = $('#ct', TV());
+  ct.scrollTop = 0; // A touch screen scrolls #ct itself: each page starts at its top.
   const open = (it: Item, el: HTMLElement) => void openDetails(it.title, el, it.why, it.startSec);
   // Anime shows on Home, Series and Movies once the profile has picked, liked or watched one; the Anime page always has it.
   const noAnime = ['home', 'series', 'movies'].includes(route) && !(await likesAnime().catch(() => true));
@@ -417,7 +462,7 @@ async function pageSettings(ct: HTMLElement) {
   // The server: link this TV, or its panel (opened here in a browser, shown as a code on a TV), or unlink.
   $('#srvl', ct)?.addEventListener('click', () => linkServer());
   $('#srvu', ct)?.addEventListener('click', () => {
-    if (confirm(t('Unlink this TV? It goes back to keeping its own data.'))) void unlinkServer();
+    if (confirm(t(touch() ? 'Unlink this device? It goes back to keeping its own data.' : 'Unlink this TV? It goes back to keeping its own data.'))) void unlinkServer();
   });
   $('#srvp', ct)?.addEventListener('click', async () => {
     if (!app.server?.linked && app.host.id === 'browser') return void window.open(app.server!.panel, '_blank', 'noopener');

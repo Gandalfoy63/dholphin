@@ -329,7 +329,8 @@ h1,h2,h3,p{margin:0}
 .pbar{position:relative;width:100%;height:8px;border-radius:4px;background:rgba(255,255,255,.3)}
 .pscrub:focus .pbar,.pscrub:hover .pbar{height:12px}
 .pbar>i{position:absolute;left:0;top:0;bottom:0;width:100%;border-radius:4px;transform-origin:0 50%;transform:scaleX(0)}
-.pbuf{background:rgba(255,255,255,.4)}.pplay{background:var(--accent)}
+/* `.pbar>` beats the setup progress bar's `.pbar i`, which painted the buffered part red. */
+.pbar>.pbuf{background:rgba(255,255,255,.4)}.pbar>.pplay{background:var(--accent)}
 .pbar>.pknob{width:28px;height:28px;top:50%;left:0;border-radius:50%;background:#fff;transform:translate(-50%,-50%) scale(0);transition:transform calc(120ms*var(--k)) var(--out)}
 .pscrub:focus .pknob,.pscrub:hover .pknob{transform:translate(-50%,-50%) scale(1)}
 .pmarks b{position:absolute;top:0;bottom:0;width:4px;margin-left:-2px;background:rgba(0,0,0,.7)}
@@ -699,3 +700,249 @@ input.line::-webkit-search-cancel-button{display:none}
 .ni.cur>.ic{fill:color-mix(in srgb,var(--accent) 30%,transparent);color:var(--text)}
 .ni:hover>.ic{fill:color-mix(in srgb,var(--text) 12%,transparent)}
 @keyframes spin{to{rotate:360deg}}
+
+/* ===== Touch Layout: a phone or a tablet (docs/05 - UI-UX/Touch Layout.md). Everything below applies only when
+   #tv has data-form (dom.ts fitTv), so a TV and a computer keep the layout above. Sizes are design pixels, drawn at
+   0.6 (phone) or 0.75 (tablet) CSS px each; the safe areas (a notch, the home bar) come in CSS px, hence / --s. ===== */
+.nmore,.xbtn{display:none}
+#tv[data-form]{left:0;top:0;transform-origin:0 0;-webkit-tap-highlight-color:transparent;touch-action:manipulation;
+  --sa-t:calc(env(safe-area-inset-top,0px) / var(--s,1));--sa-r:calc(env(safe-area-inset-right,0px) / var(--s,1));
+  --sa-b:calc(env(safe-area-inset-bottom,0px) / var(--s,1));--sa-l:calc(env(safe-area-inset-left,0px) / var(--s,1));
+  --barh:108px;--railw:136px;--gut:32px;--top:calc(36px + var(--sa-t))}
+#tv[data-form=tablet]{--gut:48px}
+/* A finger: no outline or zoom for what it taps (a keyboard still shows them), a press shrinks a little. */
+#tv[data-form] .f:focus:not(:focus-visible){outline:0}
+#tv[data-form] :is(.card,.pf,.tile,.cat,.tc,.pc,.sp,.scat,.ppl-pic,.ac .acp):is(:focus,:hover):not(:focus-visible){transform:none;box-shadow:none}
+#tv[data-form] :is(.card,.pf,.tile,.cat,.tc,.pc,.sp,.scat,.ppl-pic,.lopt,.li,.er,.es,.ac,.ni):active{transform:scale(.97)}
+#tv[data-form] .card.bf,#tv[data-form] .card.af{transform:none}
+#tv[data-form] .row.fr ~ .row{translate:none}
+/* Big enough to tap: 44 CSS px and up. */
+#tv[data-form=phone] .btn{height:76px;padding:0 28px;font-size:24px}
+#tv[data-form=phone] .chip{height:76px;padding:0 24px;font-size:24px}
+#tv[data-form] .lopt{height:88px}
+
+/* The menu: a bar at the bottom (upright), a rail at the left (sideways), always shown, each item with its name. */
+#tv[data-form] .rail{transform:none;width:auto;padding:0;overflow:visible;z-index:8}
+#tv[data-form] .rail>*{transform:none}
+#tv[data-form] .rail>.rpill,#tv[data-form] .rail>.rbar,#tv[data-form] .rmark{display:none}
+#tv[data-form] .ni{flex-direction:column;justify-content:center;gap:6px;height:auto;min-height:96px;padding:10px 4px;font-size:20px;text-align:center}
+#tv[data-form] .ni>span:not(.av){opacity:1;line-height:1.15;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#tv[data-form] .ni:focus:not(:focus-visible)>:is(.ic,.plogo,.av){transform:none}
+#tv[data-form] .ni .av{width:40px;height:40px;margin:0;font-size:20px}
+#tv[data-form] .ni.cur::before{content:"";position:absolute;background:var(--accent)}
+#tv[data-form][data-nav=bar] .rail{top:auto;left:0;right:0;bottom:0;flex-direction:row;padding:0 var(--sa-r) var(--sa-b) var(--sa-l);border-top:2px solid var(--border)}
+#tv[data-form][data-nav=bar] .rail nav{flex-direction:row;gap:0}
+#tv[data-form][data-nav=bar] .ni{flex:1;min-width:0;height:var(--barh);min-height:0;padding:8px 2px}
+#tv[data-form][data-nav=bar] .ni.nx{display:none}
+#tv[data-form][data-nav=bar] .nmore{display:flex}
+#tv[data-form][data-nav=bar] .ni.cur::before{left:32%;right:32%;top:0;height:5px;border-radius:0 0 4px 4px}
+#tv[data-form][data-nav=rail] .rail{width:var(--railw);padding:calc(12px + var(--sa-t)) 0 calc(12px + var(--sa-b)) var(--sa-l);overflow-y:auto;scrollbar-width:none;border-right:2px solid var(--border)}
+#tv[data-form][data-nav=rail] .rail nav{gap:0;flex:1}
+#tv[data-form][data-nav=rail] .ni.cur::before{left:0;top:22%;bottom:22%;width:5px;border-radius:0 4px 4px 0}
+#tv[data-form=phone][data-nav=rail] .ni.nx{display:none}
+#tv[data-form=phone][data-nav=rail] .nmore{display:flex}
+/* The page scrolls natively, beside or above the menu. */
+#tv[data-form] .content{left:0;right:0;top:0;bottom:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;scrollbar-width:none}
+#tv[data-form] .content::-webkit-scrollbar,#tv[data-form] .track::-webkit-scrollbar{display:none}
+#tv[data-form][data-nav=bar] .content{bottom:calc(var(--barh) + var(--sa-b))}
+#tv[data-form][data-nav=rail] .content{left:calc(var(--railw) + var(--sa-l));right:var(--sa-r)}
+#tv[data-form] :is(.scroller,.pg,.catpage,.cscroll,.lpage,.lscroll){position:relative;inset:auto;transform:none!important;transition:none}
+#tv[data-form] .pg{min-height:100%;box-sizing:border-box;padding:var(--top) var(--gut) 56px;gap:28px}
+#tv[data-form] .pg h1,#tv[data-form] .cscroll h1,#tv[data-form] .lhead h1{font-size:44px}
+#tv[data-form] .toast{bottom:calc(var(--barh) + var(--sa-b) + 24px);white-space:normal;max-width:calc(100% - 2 * var(--gut));box-sizing:border-box;text-align:center}
+/* More's sheet, and every dialog: a sheet rising from the bottom, on a tablet centred. */
+#tv[data-form] .modal{align-items:flex-end}
+#tv[data-form] .modal>.panel{min-width:0;width:100%;max-width:960px;box-sizing:border-box;border-radius:24px 24px 0 0;padding:36px var(--gut) calc(32px + var(--sa-b));max-height:92%;overflow-y:auto;justify-items:stretch}
+#tv[data-form] .modal>.panel{justify-items:stretch!important}
+#tv[data-form] .stack{justify-items:stretch}
+#tv[data-form] .modal>.panel>.btns{justify-content:stretch}#tv[data-form] .modal>.panel>.btns>.btn{flex:1;justify-content:center}
+#tv[data-form] .panel.seasons{width:100%;max-height:92%}
+#tv[data-form] .sgrid{grid-template-columns:1fr;max-height:none}
+.sheet h2{font-size:36px;font-weight:700}
+.sheet .lopts{gap:6px}
+.sheet .lopt>.ic{opacity:1;color:var(--text)}
+.sheet .lopt .av{width:44px;height:44px;font-size:22px;border-radius:8px;flex:none}
+.sheet .lopt .plogo{width:36px;height:36px;object-fit:contain}
+.sheet .lopt[aria-current]{box-shadow:inset 6px 0 0 var(--accent)}
+/* A layer's Close, pinned at the top right while it scrolls: Back does the same. */
+#tv[data-form] .xbtn{display:inline-flex;align-items:center;gap:8px;position:fixed;top:calc(20px + var(--sa-t));right:calc(20px + var(--sa-r));z-index:9;height:76px;padding:0 26px 0 20px;border-radius:38px;background:rgba(14,14,16,.86);color:var(--text);font-size:24px;font-weight:600;box-shadow:inset 0 0 0 2px rgba(255,255,255,.28)}
+#tv[data-form] .xbtn:active{transform:scale(.96)}
+
+/* Rows: swiped sideways, snapping to a card. */
+#tv[data-form] .row{height:auto;padding:0 0 32px}
+#tv[data-form] .row h2{font-size:30px;height:auto;padding:0 var(--gut) 14px}
+#tv[data-form] .row h2 .plogo{height:28px}
+#tv[data-form] .track{overflow-x:auto;overflow-y:hidden;scroll-snap-type:x proximity;scroll-padding-inline:var(--gut);padding:0 var(--gut);gap:16px;transform:none!important;scrollbar-width:none;overscroll-behavior-x:contain}
+#tv[data-form] .track>*{scroll-snap-align:start}
+#tv[data-form] .row.sep{padding-top:20px}
+#tv[data-form=phone] :is(.card,.skc){width:272px;height:153px}
+#tv[data-form=phone] :is(.card.poster,.skc.tall){width:200px;height:300px}
+#tv[data-form=phone] :is(.card.poster.big,.skc.big){width:290px;height:435px}
+#tv[data-form=phone] .card.ten{width:256px;height:300px}
+#tv[data-form=phone] .card.ten :is(img.art,.noart,.prog),#tv[data-form=phone] .card.ten::after{left:56px}
+#tv[data-form=phone] .card.ten img.art{width:200px}
+#tv[data-form=phone] .card.ten .num{font-size:190px;bottom:-18px}
+#tv[data-form=phone] .card.ten .ct{left:70px}
+#tv[data-form=phone] .ct{font-size:20px;left:12px;right:12px;bottom:10px}
+/* Home's sections: two by two upright, four in a line sideways. */
+#tv[data-form] .row.sects .track{display:grid;grid-template-columns:repeat(4,1fr);width:auto;overflow:visible;scroll-snap-type:none}
+#tv[data-form][data-nav=bar] .row.sects .track{grid-template-columns:repeat(2,1fr)}
+#tv[data-form] .card.sect{width:auto;height:190px}
+#tv[data-form=phone] .card.sect .sname{font-size:30px;left:20px;bottom:50px}
+#tv[data-form=phone] .card.sect .sbest{left:20px;right:20px;bottom:16px;font-size:18px}
+/* The hero: upright, the picture on top and the text under it; sideways, the text over the picture. */
+#tv[data-form][data-nav=bar] .hero{height:auto;margin-bottom:24px}
+#tv[data-form][data-nav=bar] .hero :is(.art,.noart){position:relative;display:block;aspect-ratio:16/9;height:auto}
+#tv[data-form][data-nav=bar] .hero .scrim{inset:0 0 auto;aspect-ratio:16/9;background:linear-gradient(0deg,var(--bg) 0%,rgba(14,14,16,0) 50%)}
+#tv[data-form][data-nav=bar] .htext{position:relative;left:auto;bottom:auto;width:auto;margin-top:-72px;padding:0 var(--gut);gap:16px}
+#tv[data-form][data-nav=rail] .hero{height:calc(var(--tvh) * .68);margin-bottom:24px}
+#tv[data-form][data-nav=rail] .htext{left:var(--gut);bottom:40px;width:min(900px,70%)}
+#tv[data-form] .htext h1{font-size:56px}
+#tv[data-form] .htext p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+#tv[data-form][data-nav=bar] .htext .btns{width:100%;flex-wrap:nowrap}
+#tv[data-form][data-nav=bar] .htext .btn{flex:1;justify-content:center;padding:0 12px;min-width:0;white-space:nowrap}
+/* Three buttons on a phone's line in every language ("Plus d'infos", "Più informazioni"): only Play keeps its icon. */
+#tv[data-form=phone][data-nav=bar] .htext .btn:not(.hp)>.ic{display:none}
+/* An end-of-page grid, My List and other grids: as many as fit, filling the width. */
+#tv[data-form] :is(.grid,.every-grid,.srch.native .sgrid){grid-template-columns:repeat(auto-fill,minmax(272px,1fr))!important;gap:20px 16px}
+#tv[data-form] .grid .card:not(.poster){width:auto;height:auto;aspect-ratio:16/9}
+#tv[data-form] .grid.rqgrid{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))!important}
+#tv[data-form] .rqgrid .card.poster,#tv[data-form] .rqgrid .skc.tall{width:auto;height:auto;aspect-ratio:2/3}
+#tv[data-form] .every{padding:24px var(--gut) 64px}
+#tv[data-form] .every-head{flex-wrap:wrap;gap:16px}
+/* Plain pages: lists, settings, forms at the screen's width. */
+#tv[data-form] .lst{width:auto}
+#tv[data-form] .li{gap:16px;padding:12px 16px}
+#tv[data-form=phone] .li .art{width:112px;height:63px}
+#tv[data-form=phone] .hprog .ibar{display:none}
+#tv[data-form] .prov{width:auto;flex-wrap:wrap;gap:16px 24px;padding:24px}
+#tv[data-form] .prov .i{min-width:min(100%,360px)}
+#tv[data-form] :is(.fields,.kfields .fields,.nm,.kbw){width:auto;max-width:100%}
+#tv[data-form=phone] .kfields .fields,#tv[data-form=phone] .kwhere{grid-template-columns:1fr}
+#tv[data-form] .fld{min-width:0}
+#tv[data-form] input.line{width:100%}
+#tv[data-form] .field input{font-size:16px;font-size:max(24px, calc(16px / var(--s,1)))}
+#tv[data-form] .lines,#tv[data-form] .grades{max-width:100%}
+#tv[data-form] .gbar{width:120px}
+/* Categories */
+#tv[data-form] .cscroll{padding:var(--top) var(--gut) 56px;gap:24px}
+#tv[data-form=phone] .cfeat{flex-direction:column}
+#tv[data-form=phone] .cgrid{grid-template-columns:repeat(2,1fr);gap:16px}
+#tv[data-form=tablet][data-nav=bar] .cgrid{grid-template-columns:repeat(3,1fr)}
+#tv[data-form=phone] .cat{height:170px}#tv[data-form=phone] .cfeat .cat{height:220px}
+#tv[data-form=phone] .cat .ctxt{left:20px;right:20px;bottom:16px}
+#tv[data-form=phone] .cat .ctxt b{font-size:28px}#tv[data-form=phone] .cfeat .cat .ctxt b{font-size:38px}
+#tv[data-form=phone] .cat .ctxt span{font-size:20px}
+#tv[data-form] .chero{height:auto;aspect-ratio:16/7}
+#tv[data-form] .chero h1{left:var(--gut);font-size:52px}#tv[data-form] .chero p{left:var(--gut)}
+#tv[data-form] .cgh{margin:32px 0 8px}
+/* Library: the letters stay at the right edge while the list scrolls under them, and follow a finger. */
+#tv[data-form] .lscroll{padding:var(--top) 92px 56px var(--gut)}
+#tv[data-form] .letters{position:fixed;right:calc(8px + var(--sa-r));top:calc(220px + var(--sa-t));bottom:calc(16px + var(--sa-b));touch-action:none;width:72px}
+#tv[data-form][data-nav=bar] .letters{bottom:calc(var(--barh) + var(--sa-b) + 16px)}
+#tv[data-form] .lbar{gap:10px}
+#tv[data-form=phone] .lbar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -92px 0 calc(-1 * var(--gut));padding:4px 92px 4px var(--gut)}
+#tv[data-form=phone] .lbar>*{flex:none}
+#tv[data-form=phone] .lsel b{max-width:200px}
+/* Title Details: one page that scrolls; upright, the picture on top and everything under it. */
+#tv[data-form] .dlayer{overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;background:var(--bg);scrollbar-width:none}
+#tv[data-form] .dscroll{position:relative;transform:none!important}
+#tv[data-form] .dtop{height:auto}
+#tv[data-form] .dtext{position:relative;left:auto;top:auto;width:auto;gap:20px}
+#tv[data-form] .dtext h1{font-size:56px}
+#tv[data-form] .dtext p{-webkit-line-clamp:6}
+#tv[data-form][data-nav=bar] .dback{bottom:auto;aspect-ratio:16/9}
+#tv[data-form][data-nav=bar] .dback .scrim{background:linear-gradient(0deg,var(--bg) 0%,rgba(14,14,16,0) 55%)}
+#tv[data-form][data-nav=bar] .dtext{padding:calc(var(--tvw) * .5625 - 80px) var(--gut) 40px}
+#tv[data-form][data-nav=rail] .dback{bottom:auto;height:var(--tvh)}
+#tv[data-form][data-nav=rail] .dtext{padding:calc(64px + var(--sa-t)) var(--gut) 48px calc(var(--gut) + var(--sa-l));max-width:1100px;min-height:calc(var(--tvh) - 112px);align-content:end}
+#tv[data-form] .dsecs{padding:0 var(--gut) calc(64px + var(--sa-b));gap:40px}
+#tv[data-form] .dsecs,#tv[data-form] .dtext{position:relative;z-index:1}
+#tv[data-form] :is(.cclip){overflow-x:auto;overflow-y:hidden;scrollbar-width:none;margin:-12px calc(-1 * var(--gut));padding:12px var(--gut)}
+#tv[data-form] .ctrack{transform:none!important}
+#tv[data-form=phone] .pc{width:168px}#tv[data-form=phone] .pc:has(.two){width:220px}
+#tv[data-form=phone] .pcf{height:136px}#tv[data-form=phone] .pci.one{width:136px;height:136px}#tv[data-form=phone] .pci.two{width:100px;height:100px}
+/* My List, the ratings and Seen: the name always under the icon, since a finger can't hover to see it. */
+#tv[data-form] .marks{margin-left:0;gap:4px}
+#tv[data-form=phone] .marks{display:grid;grid-template-columns:repeat(5,1fr);width:100%}
+#tv[data-form] .marks .btn.io{flex-direction:column;width:auto;min-width:104px;height:auto;padding:10px 4px;gap:6px;border-radius:12px;box-shadow:none}
+#tv[data-form] .marks .btn.io .tip{position:static;transform:none;opacity:1;background:none;padding:0;font-size:18px;font-weight:600;color:var(--muted);white-space:normal;text-align:center;line-height:1.15}
+#tv[data-form] .marks .btn.io[aria-pressed="true"] .tip{color:var(--text)}
+#tv[data-form] .marks .btn.io:is(:hover,:focus):not(:focus-visible){background:transparent}
+/* A person's page, Episodes, the actor picker: full screens that scroll. */
+#tv[data-form] .ppl{overflow-y:auto;overscroll-behavior:contain}
+#tv[data-form] .ppl-scroll{position:relative;transform:none!important}
+#tv[data-form] .ppl-top{padding:calc(110px + var(--sa-t)) var(--gut) 32px;gap:32px;min-height:0}
+#tv[data-form=phone] .ppl-top{grid-template-columns:1fr;justify-items:center}
+#tv[data-form=phone] .ppl-ph{width:280px;height:420px}
+#tv[data-form] .ppl-text h1{font-size:52px}
+#tv[data-form] .ppl-secs{padding:0 var(--gut) calc(64px + var(--sa-b))}
+#tv[data-form] .epm-in,#tv[data-form] .acm-in{padding:calc(110px + var(--sa-t)) var(--gut) 0 calc(var(--gut) + var(--sa-l))}
+#tv[data-form] :is(.epm-s,.epm-clip,.acm-clip){overflow-y:auto;overscroll-behavior:contain;scrollbar-width:none}
+#tv[data-form] :is(.epm-sl,.epm-list,.acm-grid){transform:none!important}
+#tv[data-form] .epm-clip{padding-bottom:calc(32px + var(--sa-b))}
+#tv[data-form=phone] .epm-body{grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:16px}
+#tv[data-form=phone] .epm-s{overflow-x:auto;overflow-y:hidden;padding:4px 0}
+#tv[data-form=phone] .epm-sl{flex-direction:row;gap:8px}
+#tv[data-form=phone] .es{width:auto;flex:none;white-space:nowrap;padding:12px 20px;background:var(--surface)}
+#tv[data-form=phone] .es[aria-selected="true"]{background:var(--text);color:var(--bg)}
+#tv[data-form=phone] .es[aria-selected="true"] .muted{color:var(--bg)}
+#tv[data-form=phone] .er{grid-template-columns:200px 1fr;gap:16px;padding:8px}
+#tv[data-form=phone] .ers{width:200px;height:113px}
+#tv[data-form=phone] .ert b{font-size:22px}#tv[data-form=phone] .ero{font-size:19px}
+#tv[data-form=phone] .epm-head{flex-wrap:wrap}
+#tv[data-form] .erp{opacity:1}
+#tv[data-form=tablet] .epm-body{grid-template-columns:320px 1fr}
+#tv[data-form=phone] .acm-body{grid-template-columns:1fr;grid-template-rows:auto 1fr;gap:16px}
+#tv[data-form=phone] .acm-grid{grid-template-columns:repeat(3,1fr);gap:12px}
+#tv[data-form=phone] .acp{width:140px;height:140px}
+/* Who's watching, setup: a column that scrolls, with the device's own keyboard. */
+#tv[data-form] .who{padding:var(--top) var(--gut) calc(32px + var(--sa-b));gap:40px;max-height:100%;overflow-y:auto;box-sizing:border-box}
+#tv[data-form] .who h1{font-size:48px;text-align:center}
+#tv[data-form] .plist{flex-wrap:wrap;justify-content:center;gap:24px}
+#tv[data-form=phone] .pf{width:200px}#tv[data-form=phone] .pf .av{width:168px;height:168px;font-size:72px}
+#tv[data-form] .who .setupqr{display:none}
+#tv[data-form] .onb{padding:var(--top) var(--gut) calc(32px + var(--sa-b)) calc(var(--gut) + var(--sa-l));overflow-y:auto;gap:24px}
+#tv[data-form] .obody{flex:none}
+#tv[data-form] .obody h1{font-size:44px}
+#tv[data-form] .obody .lead{font-size:24px}
+#tv[data-form] :is(.two,.withphone){grid-template-columns:1fr;gap:32px}
+#tv[data-form] .withphone .phone{display:none}
+#tv[data-form] .ofoot{flex-wrap:wrap;padding-bottom:8px}
+#tv[data-form] .taste{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+#tv[data-form] .tc{width:auto;height:auto;aspect-ratio:16/9}
+#tv[data-form] .steps{font-size:18px}
+/* The player by touch: Close at the top right and every button with its name, both hidden with the controls; the
+   bar is a wide strip a finger drags along; the panels rise from the bottom. */
+#tv[data-form] .player .xbtn{transition:opacity calc(200ms*var(--k))}
+#tv[data-form] .player.idle .xbtn{opacity:0;pointer-events:none}
+#tv[data-form] .pctl{padding:72px calc(var(--gut) + var(--sa-r)) calc(24px + var(--sa-b)) calc(var(--gut) + var(--sa-l));gap:10px}
+#tv[data-form] .phead b{font-size:30px}#tv[data-form] .phead .pe{font-size:22px}
+#tv[data-form] .pscrub{height:64px;touch-action:none}
+#tv[data-form] .pscrub .pbar{height:10px}
+#tv[data-form] .pscrub .pknob{transform:translate(-50%,-50%) scale(1)}
+#tv[data-form] .pthumb{bottom:72px}
+#tv[data-form] .prow{flex-wrap:wrap;gap:8px;margin-top:4px}
+#tv[data-form] .pb{height:auto;min-height:80px;padding:0 22px}
+#tv[data-form] .pb.io{flex-direction:column;width:auto;min-width:120px;padding:10px 12px;gap:4px;border-radius:16px}
+#tv[data-form] .pb .tip{position:static;transform:none;opacity:1;background:none;padding:0;font-size:18px;white-space:normal;text-align:center;line-height:1.15;color:inherit}
+#tv[data-form] .pb:is(:hover,:focus):not(:focus-visible){background:rgba(255,255,255,.12);color:var(--text)}
+#tv[data-form=phone][data-nav=bar] .prow .psp{flex-basis:100%;height:0}
+#tv[data-form] .pprompt{right:calc(var(--gut) + var(--sa-r))}
+#tv[data-form] .pnext{max-width:calc(var(--tvw) - 2 * var(--gut));box-sizing:border-box}
+#tv[data-form=phone] .pnext img{width:180px;height:101px}
+#tv[data-form] .psub{left:48px;right:48px}
+#tv[data-form] .ppanel{top:auto;left:0;right:0;width:auto;max-height:86%;border-radius:24px 24px 0 0;padding:32px calc(var(--gut) + var(--sa-r)) calc(24px + var(--sa-b)) calc(var(--gut) + var(--sa-l));gap:16px;box-sizing:border-box}
+#tv[data-form] .ppanel h2{font-size:34px}
+#tv[data-form] .pcols{flex-wrap:wrap;overflow-y:auto;gap:24px;overscroll-behavior:contain}
+#tv[data-form] .pcol{min-width:min(100%,300px);overflow:visible}
+#tv[data-form] .po{min-height:80px}
+#tv[data-form=phone] .pepi img{width:160px;height:90px}
+#tv[data-form] .pepb{width:160px}
+/* Setup's welcome: the logo and name at a phone's size, side by side. */
+#tv[data-form] #wl{gap:20px!important;justify-content:center;max-width:100%}
+#tv[data-form] #wl>span:first-child{width:120px!important}
+#tv[data-form] #wl>span:last-child{font-size:72px!important}
+#tv[data-form] .onb .obody:has(#wl){align-items:center}
+/* Episodes on a phone: "Request the missing seasons" is a chip in the strip, on one line like the seasons. */
+#tv[data-form=phone] .epm-sl .eall{flex:none;width:auto;min-height:0;margin:0;white-space:nowrap}

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Docs: docs/02 - Tech/Android App.md -->
-<!-- Purpose: the Android TV app: a TV launcher entry, network for the film data and the phone form, installing its own updates. -->
+<!-- Purpose: the Android app, for TVs, phones and tablets: launcher entries, network for the film data and the phone form, installing its own updates. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -31,7 +31,7 @@
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode|density"
             android:exported="true"
             android:launchMode="singleTask"
-            android:screenOrientation="landscape">
+            android:screenOrientation="fullUser">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

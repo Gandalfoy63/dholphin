@@ -4,8 +4,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${OUT:-$(mktemp -d)}"
-# The whole suite: the app, then the server behind a proxy. E2E=<script> runs one script instead.
-if [ -n "${E2E:-}" ]; then RUN="node $E2E"; else RUN="node tests/e2e/run.mjs && node tests/e2e/behind-proxy.mjs"; fi
+# The whole suite: the app, then by touch on a phone and a tablet, then the server behind a proxy. E2E=<script> runs one script instead.
+if [ -n "${E2E:-}" ]; then RUN="node $E2E"; else RUN="node tests/e2e/run.mjs && node tests/e2e/touch.mjs && node tests/e2e/behind-proxy.mjs"; fi
 docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -e OUT=/out -v "$ROOT:$ROOT" -v "$OUT:/out" -w "$ROOT" mcr.microsoft.com/playwright:v1.64.1-noble \
   sh -c "$RUN"
 echo "Screenshots: $OUT"

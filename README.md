@@ -4,11 +4,11 @@
 
 <p align="center">
   <b>Everything you can watch, in one place, starting with what fits your taste.</b><br>
-  A TV-first streaming front end for your Jellyfin server, Netflix and Seerr, with recommendations made for each profile.
+  A streaming front end for your Jellyfin server, Netflix and Seerr, on a TV, a phone or a tablet, with recommendations made for each profile.
 </p>
 
 <p align="center">
-  <a href="https://github.com/Gandalfoy63/dholphin-releases/releases/latest"><img alt="Android TV app" src="https://img.shields.io/github/v/release/Gandalfoy63/dholphin-releases?label=Android%20TV&color=E5232D"></a>
+  <a href="https://github.com/Gandalfoy63/dholphin-releases/releases/latest"><img alt="Android app" src="https://img.shields.io/github/v/release/Gandalfoy63/dholphin-releases?label=Android&color=E5232D"></a>
   <a href="https://hub.docker.com/r/gandasdevstudio/dholphin"><img alt="Docker image" src="https://img.shields.io/docker/v/gandasdevstudio/dholphin?label=Docker&color=2C6E91&sort=semver"></a>
   <a href="https://hub.docker.com/r/gandasdevstudio/dholphin"><img alt="Docker pulls" src="https://img.shields.io/docker/pulls/gandasdevstudio/dholphin?color=3F8F5F"></a>
 </p>
@@ -17,7 +17,7 @@
   <img src="media/home.jpg" alt="Dholphin's Home: a featured title and rows of picks" width="900">
 </p>
 
-> The screenshots use made-up titles and drawn artwork from the test suite. With your keys, Dholphin shows real films, series and posters from TMDB.
+> These pictures are a real household's Dholphin, in French, as its profile Max sees it: its own Jellyfin, Netflix and Seerr. Posters and pictures come from TMDB and the services. A few close-ups (the pinyin keyboard, the server panel) come from the test suite.
 
 ---
 
@@ -26,7 +26,7 @@
 Dholphin brings what you can watch into one remote-friendly app, built for the couch:
 
 - **Your Jellyfin server**: plays films and series with the right audio and subtitles, resumes where you stopped, offers the next episode.
-- **Netflix**: on Android TV, hands the title to the Netflix app; elsewhere, opens it on Netflix's own site.
+- **Netflix**: on Android, hands the title to the Netflix app; elsewhere, opens it on Netflix's own site.
 - **Seerr**: asks for what nobody has yet, a whole series or season by season, in the name of whoever asks.
 - **TMDB, OMDb and more** for the catalogue: IMDb, Rotten Tomatoes and Metacritic scores, casts, trailers, and lists from AniList, MyAnimeList, TVmaze and Trakt.
 
@@ -48,6 +48,10 @@ Every row is ordered for the profile watching: what you liked, loved, finished o
 <td><img src="media/categories.jpg" alt="Categories with artwork tiles"><br><b>Categories</b> that go deeper as you scroll: by month, by decade, hidden gems, then every title, sorted for you or by grade.</td>
 </tr>
 <tr>
+<td><img src="media/details.jpg" alt="A title's page: its grade, how likely you are to like it, where it plays, and its buttons"><br><b>Every title, explained.</b> Why it was picked for you, how likely you are to like it, where it plays, and similar titles.</td>
+<td><img src="media/library.jpg" alt="The Library: every title of every service, A to Z, with filters and letters at the side"><br><b>The Library.</b> Everything your services have in one list, A to Z, with saved filters and a letter strip at the side.</td>
+</tr>
+<tr>
 <td><img src="media/search-pinyin.jpg" alt="The search keyboard typing Chinese from pinyin"><br><b>A keyboard for every script.</b> Latin, accents, Cyrillic, Japanese kana, Korean Hangul and Chinese from pinyin.</td>
 <td><img src="media/loader.jpg" alt="The profile loader: a red ring and a dolphin leaping out of a red sea"><br><b>Profiles</b> with a famous actor's photo, their own Jellyfin account and their own history, list and taste.</td>
 </tr>
@@ -55,13 +59,29 @@ Every row is ordered for the profile watching: what you liked, loved, finished o
 
 In English, French, Spanish, German and Italian.
 
+## On a phone and a tablet
+
+The same app, laid out for a finger: a menu bar at the bottom (a rail when the screen lies sideways), pages and rows you scroll and swipe, a Close button on every page that opens over another, and a player you tap, double-tap and drag. In a phone's browser, from your Dholphin server, or as the Android app.
+
+<table>
+<tr>
+<td width="25%"><img src="media/phone-home.jpg" alt="Home on a phone: the featured title above its buttons, then the rows"></td>
+<td width="25%"><img src="media/phone-rows.jpg" alt="Home's section tiles and rows of posters on a phone"></td>
+<td width="25%"><img src="media/phone-details.jpg" alt="A title's page on a phone, with named buttons for My List, Like, Love, Not for me and Already seen"></td>
+<td width="25%"><img src="media/phone-library.jpg" alt="The Library on a phone: three posters a line and the letters at the edge"></td>
+</tr>
+</table>
+
+<p align="center"><img src="media/tablet-home.jpg" alt="Home on a tablet held sideways, with the menu as a labelled rail" width="760"></p>
+
 ## Run it
 
-Dholphin runs on its own on each TV, or with a **Dholphin server** that keeps the household's profiles, history and keys for every device, serves the app to browsers, and caches film data and pictures so pages load fast.
+Dholphin runs on its own on each TV or phone, or with a **Dholphin server** that keeps the household's profiles, history and keys for every device, serves the app to browsers, and caches film data and pictures so pages load fast.
 
 | Where | How |
 |---|---|
-| **Android TV** | Install the APK from the [latest release](https://github.com/Gandalfoy63/dholphin-releases/releases/latest). The app updates itself. |
+| **Android TV, phone or tablet** | Install the APK from the [latest release](https://github.com/Gandalfoy63/dholphin-releases/releases/latest). The app updates itself. |
+| **A phone's or a computer's browser** | Open your Dholphin server's address, below. |
 | **CoolDash OS** | Install Dholphin from the CoolDash marketplace. |
 | **Server and web app** | Docker, below: [gandasdevstudio/dholphin](https://hub.docker.com/r/gandasdevstudio/dholphin) |
 
@@ -124,7 +144,7 @@ Needs Node.js 24, Rust with the `wasm32-unknown-unknown` target, and Docker for 
 npm ci
 tools/pack_cooldash.sh          # builds the web app, the Rust core (WebAssembly) and the CoolDash package
 tools/build_server.sh           # builds the server image, dholphin:latest
-tools/build_android.sh          # builds the Android TV APK (Android SDK needed)
+tools/build_android.sh          # builds the Android APK, for TVs, phones and tablets (Android SDK needed)
 
 npx tsc --noEmit && npx vitest run && cargo test
 tools/test_e2e.sh               # the app driven by keyboard in a real browser, against stand-in services
@@ -135,9 +155,9 @@ tools/test_e2e.sh               # the app driven by keyboard in a real browser, 
 | `src/` | The app: TypeScript, no framework. `core/` the catalogue, taste and data, `ui/` the screens |
 | `crates/` | The Rust core, compiled to WebAssembly: ranking, taste, normalising TMDB |
 | `providers/` | Jellyfin and Seerr, Netflix |
-| `hosts/` | Where it runs: browser, Android TV, CoolDash OS |
+| `hosts/` | Where it runs: browser, Android (TV, phone, tablet), CoolDash OS |
 | `server/` | The Dholphin server (Node.js, no dependencies) and its panel |
-| `android/` | The Android TV app (Kotlin WebView) |
+| `android/` | The Android app for TVs, phones and tablets (Kotlin WebView) |
 | `docker/` | The image and the Compose files |
 | `tests/` | Unit tests and the end-to-end tests with stand-in services |
 

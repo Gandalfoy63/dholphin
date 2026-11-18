@@ -4,7 +4,7 @@ import { buildList, DEFAULT_FILTERS, LETTERS, letterOf, letterStarts, readFilter
 import type { IndexStatus } from '@/core/titleindex';
 import type { Provider, Title } from '@/sdk/types';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, leave, plogo, reduced, TV } from './dom';
+import { A, $, $$, cascade, esc, ico, leave, plogo, reduced, touch, TV } from './dom';
 import { openDetails } from './details';
 import { go, nav, setScroll } from './focus';
 import { t } from './i18n';
@@ -17,6 +17,8 @@ const SORTS = [['az', 'A to Z'], ['za', 'Z to A'], ['best', 'Best rated'], ['wor
 const label = <T>(list: readonly (readonly [T, string])[], v: T) => t(list.find((x) => x[0] === v)![1]);
 /** A poster's width and height, the gaps, on the 1080-high canvas. */
 const CW = 240, CH = 360, GX = 20, GY = 28, RH = CH + GY;
+/** On a touch screen the posters fill the width instead: three at least, about 200 wide each. */
+const TOUCH_CW = 200, TOUCH_COLS = 3;
 /** Rows drawn above and below those in view, so the remote always has a card to move to. */
 const SPARE = 1;
 const VIEW = 1080;
@@ -81,17 +83,23 @@ export async function pageLibrary(ct: HTMLElement, to: (route: string) => void) 
     return;
   }
 
-  let list: Title[] = [], starts = new Map<string, number>(), y = 0, cols = 1;
+  let list: Title[] = [], starts = new Map<string, number>(), y = 0, cols = 1, cw = CW, ch = CH, rh = RH;
   /** After a jump to a letter, the mark stays on it (its row may start with the letter before) until the list moves. */
   let pinned: number | undefined;
   const drawn = new Map<number, HTMLElement>();
   const save = () => void app.store.set(filtersKey(), f).catch(() => undefined);
 
   // ---- Scrolling: the page slides; only the rows near the screen have cards. ----
+  // A touch screen scrolls the page natively (#ct): `y` follows it, and a jump sets it.
+  const native = touch(), view = () => (native ? ct.clientHeight : VIEW);
   const top = () => virt.offsetTop;
-  const maxY = () => Math.max(0, top() + Math.ceil(list.length / cols) * RH + 40 - VIEW);
+  const maxY = () => Math.max(0, top() + Math.ceil(list.length / cols) * rh + 40 - view());
   const setY = (to: number, quick = false) => {
     y = Math.min(maxY(), Math.max(0, to));
+    if (native) {
+      ct.scrollTop = y;
+      return draw();
+    }
     sc.style.transition = quick ? 'transform 140ms ease-out' : '';
     sc.style.transform = `translateY(${-y}px)`;
     draw();
@@ -100,12 +108,27 @@ export async function pageLibrary(ct: HTMLElement, to: (route: string) => void) 
     pinned = undefined;
     setY(y + dy, true);
   } });
+  if (native) {
+    const follow = () => {
+      if (!virt.isConnected) return ct.removeEventListener('scroll', follow);
+      // A jump's own scroll keeps the letter it went to; a finger's moves the mark with the list.
+      if (Math.abs(ct.scrollTop - y) > 1) pinned = undefined;
+      y = ct.scrollTop;
+      draw();
+    };
+    ct.addEventListener('scroll', follow, { passive: true });
+  }
 
   /** Adds the cards of the rows in view, and takes away those far from it (never the one with focus). */
   const draw = () => {
-    cols = Math.max(1, Math.floor((virt.clientWidth + GX) / (CW + GX)));
-    virt.style.height = `${Math.ceil(list.length / cols) * RH}px`;
-    const r0 = Math.max(0, Math.floor((y - top()) / RH) - SPARE), r1 = Math.max(0, Math.ceil((y - top() + VIEW) / RH) + SPARE);
+    if (native) {
+      cols = Math.max(TOUCH_COLS, Math.floor((virt.clientWidth + GX) / (TOUCH_CW + GX)));
+      cw = (virt.clientWidth - GX * (cols - 1)) / cols;
+      ch = cw * 1.5;
+      rh = ch + GY;
+    } else cols = Math.max(1, Math.floor((virt.clientWidth + GX) / (cw + GX)));
+    virt.style.height = `${Math.ceil(list.length / cols) * rh}px`;
+    const r0 = Math.max(0, Math.floor((y - top()) / rh) - SPARE), r1 = Math.max(0, Math.ceil((y - top() + view()) / rh) + SPARE);
     const from = r0 * cols, upto = Math.min(list.length, (r1 + 1) * cols);
     for (const [i, el] of drawn) if ((i < from || i >= upto) && el !== document.activeElement) {
       el.remove();
@@ -116,7 +139,7 @@ export async function pageLibrary(ct: HTMLElement, to: (route: string) => void) 
     if (fresh.length) {
       const items = fresh.map((i): Item => ({ title: list[i]! }));
       const box = document.createElement('div');
-      box.innerHTML = fresh.map((i) => cardHtml({ title: list[i]! }, `role="listitem" data-i="${i}" style="left:${(i % cols) * (CW + GX)}px;top:${Math.floor(i / cols) * RH}px"`, true, false, true)).join('');
+      box.innerHTML = fresh.map((i) => cardHtml({ title: list[i]! }, `role="listitem" data-i="${i}" style="left:${(i % cols) * (cw + GX)}px;top:${Math.floor(i / cols) * rh}px${native ? `;width:${cw}px;height:${ch}px` : ''}"`, true, false, true)).join('');
       bindCards(box, items, open);
       ([...box.children] as HTMLElement[]).forEach((el, k) => {
         drawn.set(fresh[k]!, el);
@@ -129,7 +152,7 @@ export async function pageLibrary(ct: HTMLElement, to: (route: string) => void) 
   // ---- Letters: those with titles stand out, the others are dimmed; the red mark follows where you are. ----
   const markLetter = (at?: number) => {
     if (letters.hidden || !list.length) return;
-    const i = at ?? Math.min(list.length - 1, Math.max(0, Math.floor((y - top() + 40) / RH)) * cols);
+    const i = at ?? Math.min(list.length - 1, Math.max(0, Math.floor((y - top() + 40) / rh)) * cols);
     const b = $(`[data-l="${letterOf(list[i]!.name)}"]`, letters);
     if (!b) return;
     // With the letter, wherever the dock effect has pushed it.
@@ -169,11 +192,36 @@ export async function pageLibrary(ct: HTMLElement, to: (route: string) => void) 
   letters.addEventListener('focusout', (e) => {
     if (!letters.contains(e.relatedTarget as Node)) swell(null);
   });
+  // A finger slides along the letters, as on a phone's contacts: the list follows the letter under it.
+  if (native) {
+    let held = '';
+    const under = (e: PointerEvent) => {
+      const items = $$<HTMLButtonElement>('.lt1', letters), r = letters.getBoundingClientRect();
+      const at = Math.max(0, Math.min(items.length - 1, Math.floor(((e.clientY - r.top) / r.height) * items.length)));
+      // The nearest letter with titles, downwards first.
+      const b = items.slice(at).find((x) => !x.disabled) ?? items.slice(0, at).reverse().find((x) => !x.disabled);
+      if (!b || b.dataset.l === held) return;
+      held = b.dataset.l!;
+      b.click();
+      swell(items.indexOf(b));
+    };
+    letters.addEventListener('pointerdown', (e) => {
+      letters.setPointerCapture(e.pointerId);
+      held = '';
+      under(e);
+    });
+    letters.addEventListener('pointermove', (e) => {
+      if (letters.hasPointerCapture(e.pointerId)) under(e);
+    });
+    const end = () => swell(null);
+    letters.addEventListener('pointerup', end);
+    letters.addEventListener('pointercancel', end);
+  }
   $$('.lt1', letters).forEach((b) => (b.onclick = () => {
     const i = starts.get(b.dataset.l!);
     if (i === undefined) return;
     pinned = i;
-    setY(top() + Math.floor(i / cols) * RH - 24);
+    setY(top() + Math.floor(i / cols) * rh - 24);
     // The remote goes on from the first title under the letter; the pointer stays on the letters.
     if (!nav.pointer) go(drawn.get(i));
   }));
@@ -185,9 +233,9 @@ export async function pageLibrary(ct: HTMLElement, to: (route: string) => void) 
     pinned = undefined;
     markLetter(i);
     if (nav.pointer) return;
-    const rowTop = top() + Math.floor(i / cols) * RH;
+    const rowTop = top() + Math.floor(i / cols) * rh;
     if (rowTop - y < 160) setY(rowTop - 160);
-    else if (rowTop + CH - y > VIEW - 60) setY(rowTop + CH - VIEW + 60);
+    else if (rowTop + ch - y > view() - 60) setY(rowTop + ch - view() + 60);
   });
   bar.addEventListener('focusin', () => {
     if (!nav.pointer) setY(0);

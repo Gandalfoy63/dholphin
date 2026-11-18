@@ -2,7 +2,7 @@
 // Purpose: a TV and a Dholphin server: linking with a code, the panel's address as a QR code, and waiting for the first profile.
 import type { ServerLink } from './app';
 import { app } from './app';
-import { A, $, esc, ico, TV, toast } from './dom';
+import { A, $, esc, ico, touch, TV, toast } from './dom';
 import { go } from './focus';
 import { t } from './i18n';
 import { bindPhone, phoneHtml } from './phone';
@@ -79,7 +79,7 @@ export async function panelHtml(): Promise<string> {
  * moves on by itself once a profile exists there; or the setup can be done here instead.
  */
 export async function waitForServerSetup(onReady: () => void, setUpHere: () => void) {
-  TV().innerHTML = `<div class="onb"><div class="obody" style="justify-content:center;gap:28px"><h1>${t('Set up this server')}</h1><p class="lead">${t('This TV is linked to a Dholphin server that has no profile yet. Set it up in its panel, from a phone or a computer: this screen moves on by itself.')}</p>${await panelHtml()}<div class="btns"><button class="f btn" id="here" type="button">${t('Set up here instead')}</button></div></div></div>`;
+  TV().innerHTML = `<div class="onb"><div class="obody" style="justify-content:center;gap:28px"><h1>${t('Set up this server')}</h1><p class="lead">${t(touch() ? 'This device is linked to a Dholphin server that has no profile yet. Set it up in its panel, from a phone or a computer: this screen moves on by itself.' : 'This TV is linked to a Dholphin server that has no profile yet. Set it up in its panel, from a phone or a computer: this screen moves on by itself.')}</p>${await panelHtml()}<div class="btns"><button class="f btn" id="here" type="button">${t('Set up here instead')}</button></div></div></div>`;
   const timer = setInterval(async () => {
     const r = await fetch(`${app.config.store}?prefix=profiles`).then((x) => (x.ok ? x.json() : {})).catch(() => ({})) as { profiles?: unknown[] };
     if (r.profiles?.length) {

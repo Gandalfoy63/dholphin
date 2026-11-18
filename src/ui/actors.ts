@@ -2,7 +2,7 @@
 // Purpose: picks a famous actor as a profile's picture: TMDB's most popular actors, or a search by name.
 import type { Actor } from '@/core/catalog';
 import { app } from './app';
-import { A, $, $$, cascade, esc, ico, leave, TV } from './dom';
+import { A, $, $$, cascade, closeHtml, esc, ico, leave, touch, TV } from './dom';
 import { go } from './focus';
 import { t } from './i18n';
 import { bindLine, lineHtml, lineStart } from './textentry';
@@ -13,7 +13,7 @@ import { bindLine, lineHtml, lineStart } from './textentry';
  */
 export function pickActor(opener: HTMLElement, current?: string): Promise<Actor | null | undefined> {
   return new Promise((done) => {
-    TV().insertAdjacentHTML('beforeend', `<div class="modal acm" role="dialog" aria-label="${t('Choose an actor')}"><div class="acm-in"><header><h2>${t('Choose an actor')}</h2><span class="muted">${t('Most popular on TMDB, or search by name')}</span></header><div class="acm-body"><div class="stack">${lineHtml({ label: t('Search by name'), max: 30, type: 'search' })}</div><div class="acm-clip"><div class="acm-grid" role="list"><span class="btn" aria-busy="true">${t('Loading')}</span></div></div></div></div></div>`);
+    TV().insertAdjacentHTML('beforeend', `<div class="modal acm" role="dialog" aria-label="${t('Choose an actor')}">${closeHtml(t('Close'))}<div class="acm-in"><header><h2>${t('Choose an actor')}</h2><span class="muted">${t('Most popular on TMDB, or search by name')}</span></header><div class="acm-body"><div class="stack">${lineHtml({ label: t('Search by name'), max: 30, type: 'search' })}</div><div class="acm-clip"><div class="acm-grid" role="list"><span class="btn" aria-busy="true">${t('Loading')}</span></div></div></div></div></div>`);
     const m = $('.acm', TV()), grid = $('.acm-grid', m);
     A($('.acm-in', m), [{ opacity: 0, transform: 'translateY(32px)' }, { opacity: 1, transform: 'none' }], { duration: 340 });
     A(m, [{ opacity: 0 }, { opacity: 1 }], { duration: 240 });
@@ -40,6 +40,7 @@ export function pickActor(opener: HTMLElement, current?: string): Promise<Actor 
         b.onclick = () => close(i < 0 ? null : list[i]!);
         // Keep the focused actor in view: the grid slides, the page doesn't scroll.
         b.addEventListener('focus', () => {
+          if (touch()) return; // The grid scrolls natively.
           const room = (grid.parentElement as HTMLElement).clientHeight - 24;
           grid.style.transform = `translateY(${-Math.max(0, Math.min(grid.scrollHeight - room, b.offsetTop - room / 3))}px)`;
         });

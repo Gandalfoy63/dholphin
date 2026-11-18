@@ -91,25 +91,78 @@ export function toast(message: string) {
 
 /** The widest the canvas grows, for a wide window (21:9). */
 const MAX_W = 2560;
+
 /**
- * Fits the 1080-high canvas to the window. A TV is 16:9, so 1920 wide. A computer's browser window is often wider
- * (a laptop with its toolbars): the canvas then widens to fill it, instead of black bars at the sides. A taller one
- * keeps 1920 and centres it.
+ * What the app runs on. `tv`: a remote, or a computer's mouse and keys, on the 1080-high canvas. `phone` and `tablet`:
+ * a touch screen, whose primary pointer is a finger (Touch Layout).
+ */
+export type Form = 'tv' | 'phone' | 'tablet';
+let form: Form = 'tv';
+/** CSS pixels per design pixel on a touch screen: the design's sizes, read at arm's length rather than at 3 m. */
+export const TOUCH_SCALE: Record<Exclude<Form, 'tv'>, number> = { phone: 0.6, tablet: 0.75 };
+/** A phone's shorter side is under this many CSS pixels; a tablet's is not. */
+const PHONE_MAX = 600;
+/**
+ * The form, from the primary pointer and the screen: a finger on a short screen is a phone. A TV's WebView has no
+ * pointer, and a computer's is fine, so both stay `tv`. `?form=phone` (or tablet, tv) asks for one, for a test.
+ */
+export function detectForm(): Form {
+  const asked = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('form');
+  if (asked === 'tv' || asked === 'phone' || asked === 'tablet') return asked;
+  if (typeof matchMedia === 'undefined' || !matchMedia('(pointer: coarse)').matches) return 'tv';
+  return Math.min(innerWidth, innerHeight) < PHONE_MAX ? 'phone' : 'tablet';
+}
+/** The form chosen at start. */
+export const formOf = () => form;
+/** A touch screen: pages scroll natively, nothing moves with focus, nothing waits for a hover. */
+export const touch = () => form !== 'tv';
+
+/**
+ * Fits the canvas to the window.
+ *
+ * On a TV it is 1080 high. A TV is 16:9, so 1920 wide. A computer's browser window is often wider (a laptop with its
+ * toolbars): the canvas then widens to fill it, instead of black bars at the sides. A taller one keeps 1920 and
+ * centres it.
+ *
+ * On a touch screen it is the screen itself, in design pixels: a phone held upright is about 650 by 1400. The
+ * navigation is a bar at the bottom when the screen is upright, a rail at the left when it lies sideways.
  */
 export function fitTv() {
+  form = detectForm();
+  const tv = TV();
+  if (form !== 'tv') tv.dataset.form = form;
   const fit = () => {
+    if (form !== 'tv') {
+      const s = TOUCH_SCALE[form], w = innerWidth / s, h = innerHeight / s;
+      tv.style.width = `${w}px`;
+      tv.style.height = `${h}px`;
+      tv.style.setProperty('--tvw', `${w}px`);
+      tv.style.setProperty('--tvh', `${h}px`);
+      tv.style.setProperty('--s', String(s));
+      tv.style.transform = `scale(${s})`;
+      tv.dataset.nav = innerWidth > innerHeight ? 'rail' : 'bar';
+      return;
+    }
     const w = Math.round(Math.min(MAX_W, Math.max(1920, (1080 * innerWidth) / innerHeight)));
     const s = Math.min(innerWidth / w, innerHeight / 1080);
-    TV().style.width = `${w}px`;
-    TV().style.setProperty('--tvw', `${w}px`);
-    TV().style.transform = `translate(-50%, -50%) scale(${s})`;
+    tv.style.width = `${w}px`;
+    tv.style.setProperty('--tvw', `${w}px`);
+    tv.style.transform = `translate(-50%, -50%) scale(${s})`;
   };
   addEventListener('resize', fit);
   fit();
 }
-/** The canvas's width: 1920 on a TV, up to 2560 in a wide browser window. */
+/** The canvas's width: 1920 on a TV, up to 2560 in a wide browser window, the screen's on a touch screen. */
 export const tvW = () => TV().offsetWidth || 1920;
-export const tvScale = () => TV().getBoundingClientRect().height / 1080;
+/** The canvas's height: 1080, except on a touch screen. */
+export const tvH = () => TV().offsetHeight || 1080;
+export const tvScale = () => TV().getBoundingClientRect().height / tvH();
+
+/**
+ * A layer's Close button, shown on a touch screen only (a remote and a computer have Back): pinned at the top right,
+ * it does what Back does (`installKeys`). `label` is already translated.
+ */
+export const closeHtml = (label: string) => `<button class="f xbtn" type="button" aria-label="${esc(label)}">${ico('x')}<span>${esc(label)}</span></button>`;
 
 /** The Dholphin mark and wordmark, with its start animation. */
 const D = 'M40 32H120A96 96 0 0 1 120 224H40Z';
